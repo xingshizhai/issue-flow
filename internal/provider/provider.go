@@ -15,6 +15,7 @@ var (
 	ErrRateLimited        = errors.New("provider rate limited")
 	ErrUnavailable        = errors.New("provider unavailable")
 	ErrUnsupported        = errors.New("provider capability unsupported")
+	ErrMisconfigured      = errors.New("provider configuration invalid")
 )
 
 type ListQuery struct {

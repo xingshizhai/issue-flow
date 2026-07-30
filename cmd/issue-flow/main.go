@@ -391,6 +391,8 @@ func (c *cli) providerFailureWithID(format, operationID string, err error) int {
 		return c.failWithIDRetryable(format, operationID, "PERMISSION_DENIED", err, 3, false)
 	case errors.Is(err, provider.ErrNotFound):
 		return c.failWithIDRetryable(format, operationID, "NOT_FOUND", err, 4, false)
+	case errors.Is(err, provider.ErrMisconfigured):
+		return c.failWithIDRetryable(format, operationID, "CONFIG_ERROR", err, 2, false)
 	case errors.Is(err, provider.ErrRateLimited):
 		return c.failWithIDRetryable(format, operationID, "RATE_LIMITED", err, 6, true)
 	case errors.Is(err, provider.ErrUnsupported):

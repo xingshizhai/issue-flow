@@ -48,7 +48,47 @@ func (p *Provider) Check(ctx context.Context) error {
 		ID int64 `json:"id"`
 	}
 	_, err := p.client.Get(ctx, p.repoPath(""), nil, &repository)
-	return err
+	if err != nil {
+		return err
+	}
+	names, err := p.listLabelNames(ctx)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, state := range []domain.WorkflowState{
+		domain.StateReady, domain.StateClaimed, domain.StateWorking,
+		domain.StateBlocked, domain.StateReview, domain.StateDone,
+	} {
+		name := p.workflow.LabelFor(state)
+		if !names[name] {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("%w: missing workflow labels: %s",
+			provider.ErrMisconfigured, strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func (p *Provider) listLabelNames(ctx context.Context) (map[string]bool, error) {
+	names := make(map[string]bool)
+	for page := 1; ; page++ {
+		var labels []labelDTO
+		values := url.Values{"page": {strconv.Itoa(page)}, "per_page": {"100"}}
+		response, err := p.client.Get(ctx, p.repoPath("/labels"), values, &labels)
+		if err != nil {
+			return nil, err
+		}
+		for _, label := range labels {
+			names[label.Name] = true
+		}
+		if nextPage(response.Header.Get("Link")) == "" && len(labels) < 100 {
+			return names, nil
+		}
+	}
 }
 
 func (p *Provider) ListIssues(ctx context.Context, query provider.ListQuery) (provider.IssuePage, error) {

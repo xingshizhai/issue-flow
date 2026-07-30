@@ -3,6 +3,7 @@ package gitee
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +43,67 @@ func TestListIssuesMapsStateAndPagination(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0].Number != "IABC1" ||
 		page.Items[0].WorkflowState != domain.StateReady || page.NextCursor != "2" {
 		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestCheckValidatesRepositoryAndWorkflowLabels(t *testing.T) {
+	t.Parallel()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/user":
+			_, _ = w.Write([]byte(`{"id":7,"login":"automation"}`))
+		case "/repos/owner/repo":
+			_, _ = w.Write([]byte(`{"id":10}`))
+		case "/repos/owner/repo/labels":
+			_, _ = w.Write([]byte(`[
+				{"name":"agent:ready"},{"name":"agent:claimed"},
+				{"name":"agent:working"},{"name":"agent:blocked"},
+				{"name":"agent:review"},{"name":"agent:done"}
+			]`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	if err := testProvider(handler).Check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckReportsMissingWorkflowLabelsWithoutWriting(t *testing.T) {
+	t.Parallel()
+
+	writes := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes++
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/user":
+			_, _ = w.Write([]byte(`{"id":7,"login":"automation"}`))
+		case "/repos/owner/repo":
+			_, _ = w.Write([]byte(`{"id":10}`))
+		case "/repos/owner/repo/labels":
+			_, _ = w.Write([]byte(`[{"name":"agent:ready"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	err := testProvider(handler).Check(context.Background())
+	if !errors.Is(err, provider.ErrMisconfigured) {
+		t.Fatalf("error = %v", err)
+	}
+	for _, missing := range []string{
+		"agent:blocked", "agent:claimed", "agent:done", "agent:review", "agent:working",
+	} {
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("error %q does not name missing label %q", err, missing)
+		}
+	}
+	if writes != 0 {
+		t.Fatalf("doctor check performed %d writes", writes)
 	}
 }
 

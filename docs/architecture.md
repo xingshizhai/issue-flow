@@ -245,6 +245,9 @@ issue-flow finish <issue>
 
 `doctor` 用于只读检查配置、Token 是否存在、仓库访问、所需标签和 Provider 能力。默认不得自动创建标签；可另设显式 `doctor --fix`。
 
+Gitee `doctor` 分页读取仓库标签并核对六个状态映射。任一标签缺失时返回
+`CONFIG_ERROR` 和稳定排序的缺失标签名；检查过程只允许 GET，不得隐式创建标签。
+
 ### 7.3 JSON 响应信封
 
 成功：

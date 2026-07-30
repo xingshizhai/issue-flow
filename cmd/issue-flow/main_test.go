@@ -81,6 +81,7 @@ func TestProviderErrorMappingAndRetryability(t *testing.T) {
 		{"authentication", provider.ErrAuthentication, "AUTHENTICATION_FAILED", 3, false},
 		{"permission", provider.ErrPermission, "PERMISSION_DENIED", 3, false},
 		{"not found", provider.ErrNotFound, "NOT_FOUND", 4, false},
+		{"misconfigured", provider.ErrMisconfigured, "CONFIG_ERROR", 2, false},
 		{"rate limited", provider.ErrRateLimited, "RATE_LIMITED", 6, true},
 		{"unsupported", provider.ErrUnsupported, "UNSUPPORTED_CAPABILITY", 6, false},
 		{"unavailable", provider.ErrUnavailable, "PROVIDER_UNAVAILABLE", 6, true},
