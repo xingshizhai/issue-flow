@@ -54,6 +54,34 @@ func TestInitDoctorAndListJSON(t *testing.T) {
 	assertEnvelope(t, stdout, true, "")
 }
 
+func TestVerboseReportsSafeMetadataOnStderr(t *testing.T) {
+	t.Parallel()
+
+	project := seededProject(t)
+	code, stdout, stderr := invoke("doctor", "--project", project, "--format", "json", "--verbose")
+	if code != 0 {
+		t.Fatalf("doctor code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	assertEnvelope(t, stdout, true, "")
+	for _, expected := range []string{
+		"issue-flow: debug:",
+		"provider=fake",
+		"transport=local",
+		"credential=none",
+		"read=true",
+		"write=true",
+	} {
+		if !strings.Contains(stderr, expected) {
+			t.Errorf("stderr %q does not contain %q", stderr, expected)
+		}
+	}
+	for _, forbidden := range []string{"lease-token", "access_token", "tokenHash"} {
+		if strings.Contains(stderr, forbidden) {
+			t.Errorf("stderr contains sensitive field name %q: %q", forbidden, stderr)
+		}
+	}
+}
+
 func TestLeaseWorkflowAndAuthorization(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{

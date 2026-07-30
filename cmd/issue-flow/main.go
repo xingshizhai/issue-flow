@@ -32,6 +32,7 @@ type globals struct {
 	project string
 	format  string
 	dryRun  bool
+	verbose bool
 }
 
 func main() {
@@ -360,6 +361,18 @@ func (c *cli) open(g globals) (*app.Runtime, int) {
 	if err != nil {
 		return nil, c.fail(g.format, "CONFIG_ERROR", err, 2)
 	}
+	if g.verbose {
+		capabilities := runtime.Provider.Capabilities(context.Background())
+		fmt.Fprintf(c.stderr,
+			"issue-flow: debug: config=%s provider=%s transport=%s credential=%s read=%t write=%t\n",
+			runtime.ConfigPath,
+			runtime.Config.Provider.Type,
+			capabilities.AccessTransport,
+			capabilities.CredentialMode,
+			capabilities.ReadIssues,
+			capabilities.WriteIssues,
+		)
+	}
 	return runtime, 0
 }
 
@@ -453,7 +466,8 @@ Global flags (accepted before or after the command):
   --project <path>
   --format text|json
   --json
-  --dry-run`)
+  --dry-run
+  --verbose`)
 }
 
 func parseGlobals(args []string) (globals, []string, error) {
@@ -466,6 +480,8 @@ func parseGlobals(args []string) (globals, []string, error) {
 			g.format = "json"
 		case arg == "--dry-run":
 			g.dryRun = true
+		case arg == "--verbose":
+			g.verbose = true
 		case arg == "--config" || arg == "--project" || arg == "--format":
 			if i+1 >= len(args) {
 				return g, nil, fmt.Errorf("%s requires a value", arg)

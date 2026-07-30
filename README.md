@@ -49,6 +49,8 @@ issue-flow start 123 --agent "<stable-agent-id>" --lease-token "<token-from-clai
 
 `context` reports the normalized Issue, project instruction files, structured validation commands, effective automation permission, Git policy, and a sanitized branch suggestion. It does not execute validation commands or grant permissions.
 
+Add `--verbose` when troubleshooting configuration selection or Provider capabilities. Diagnostics go to stderr and never include credential or lease values; JSON results remain on stdout.
+
 The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
 ```bash
