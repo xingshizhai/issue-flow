@@ -21,6 +21,7 @@ type Runtime struct {
 	ProjectRoot string
 	Config      config.Config
 	Provider    provider.Provider
+	TokenSet    bool
 }
 
 func (r *Runtime) Workflow() *workflow.Service {
@@ -33,6 +34,10 @@ func (r *Runtime) Workflow() *workflow.Service {
 }
 
 func Open(configPath, project string) (*Runtime, error) {
+	return OpenWithLookup(configPath, project, os.LookupEnv)
+}
+
+func OpenWithLookup(configPath, project string, lookup func(string) (string, bool)) (*Runtime, error) {
 	path, err := config.Find(configPath, project)
 	if err != nil {
 		return nil, err
@@ -50,7 +55,7 @@ func Open(configPath, project string) (*Runtime, error) {
 		}
 		p = fake.New(dataPath)
 	case "gitee":
-		token := os.Getenv(cfg.Provider.TokenEnv)
+		token, _ := lookup(cfg.Provider.TokenEnv)
 		if token == "" {
 			return nil, fmt.Errorf("environment variable %s is not set", cfg.Provider.TokenEnv)
 		}
@@ -63,9 +68,13 @@ func Open(configPath, project string) (*Runtime, error) {
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider.Type)
 	}
-	return &Runtime{
+	runtime := &Runtime{
 		ConfigPath: path, ProjectRoot: filepath.Dir(path), Config: cfg, Provider: p,
-	}, nil
+	}
+	if cfg.Provider.TokenEnv != "" {
+		_, runtime.TokenSet = lookup(cfg.Provider.TokenEnv)
+	}
+	return runtime, nil
 }
 
 func (r *Runtime) Context(ctx context.Context, number string) (projectcontext.Context, error) {
@@ -92,7 +101,7 @@ func (r *Runtime) Doctor(ctx context.Context) (DoctorResult, error) {
 	}
 	if r.Config.Provider.TokenEnv != "" {
 		result.TokenEnv = r.Config.Provider.TokenEnv
-		_, result.TokenSet = os.LookupEnv(r.Config.Provider.TokenEnv)
+		result.TokenSet = r.TokenSet
 	}
 	if err := r.Provider.Check(ctx); err != nil {
 		return result, err

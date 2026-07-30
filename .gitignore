@@ -1,5 +1,6 @@
 /bin/
 /dist/
 /issue-flow
+/.env
 /.issue-flow.yaml
 /.issue-flow-fake.json

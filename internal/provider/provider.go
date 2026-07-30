@@ -45,6 +45,16 @@ type IssueReader interface {
 	GetIssue(context.Context, string) (domain.Issue, error)
 }
 
+type CreateIssueInput struct {
+	Title  string
+	Body   string
+	Labels []string
+}
+
+type IssueCreator interface {
+	CreateIssue(context.Context, CreateIssueInput) (domain.Issue, error)
+}
+
 type Precondition struct {
 	Version       string
 	WorkflowState domain.WorkflowState

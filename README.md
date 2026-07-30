@@ -42,7 +42,17 @@ The configuration must be a regular, non-symlink file no larger than 1 MiB. `ini
 
 For Gitee REST Token mode, `provider.token_env` must be an uppercase `GITEE_*TOKEN*` name such as `GITEE_TOKEN`. Repository configuration cannot redirect credential loading to unrelated variables such as `PATH`, cloud credentials, or another Provider's token.
 
-The current configuration supports the Gitee REST API with an environment token. Copy `examples/issue-flow.example.yaml` to `.issue-flow.yaml`, set the owner and repository path, export the configured token variable, and run `issue-flow doctor`. The read-only check verifies the account, repository, and all six configured workflow labels; it reports `CONFIG_ERROR` with missing label names and never creates them. The Provider uses a shared access interface: REST OAuth has a refreshable external credential-source boundary, while the MCP factory returns `UNSUPPORTED_CAPABILITY` until its adapter is implemented. Neither OAuth nor MCP can currently be selected in project configuration. `doctor` reports the active transport and credential mode.
+The current configuration supports the Gitee REST API with an environment token. Copy `examples/issue-flow.example.yaml` to `.issue-flow.yaml`, set the owner and repository path, export the configured token variable, and run `issue-flow doctor`. Alternatively, pass an explicit mode-0600 dotenv file with `--env-file .env`; process environment variables take precedence and dotenv values are parsed as literals without shell evaluation. The read-only check verifies the account, repository, and all six configured workflow labels; it reports `CONFIG_ERROR` with missing label names and never creates them. The Provider uses a shared access interface: REST OAuth has a refreshable external credential-source boundary, while the MCP factory returns `UNSUPPORTED_CAPABILITY` until its adapter is implemented. Neither OAuth nor MCP can currently be selected in project configuration. `doctor` reports the active transport and credential mode.
+
+Create a ready Issue with a body stored in a regular file:
+
+```bash
+issue-flow create --type bug --title "Fix whitespace handling" --body-file issue.md
+```
+
+Supported types are `bug`, `feature`, and `improvement`. The command adds the
+configured ready label and a `type:<type>` label; providers may ignore labels
+that do not exist or that the token cannot manage.
 
 ## Agent workflow
 

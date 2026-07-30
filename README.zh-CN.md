@@ -42,7 +42,17 @@ issue-flow doctor
 
 使用 Gitee REST Token 时，`provider.token_env` 必须是大写的 `GITEE_*TOKEN*` 名称，例如 `GITEE_TOKEN`。仓库配置不能把凭据读取重定向到 `PATH`、云密钥或其他 Provider Token 等无关环境变量。
 
-当前配置支持使用环境变量 Token 的 Gitee REST API。将 `examples/issue-flow.example.yaml` 复制为 `.issue-flow.yaml`，填写 owner 和仓库路径，导出配置指定的 Token 环境变量，然后运行 `issue-flow doctor`。该只读检查会验证账号、仓库和配置的六个工作流标签；缺少标签时返回带标签名的 `CONFIG_ERROR`，不会自动创建。Provider 已使用统一访问接口：REST OAuth 具有可刷新外部凭据源边界；MCP 工厂在适配器尚未实现时返回 `UNSUPPORTED_CAPABILITY`。OAuth 和 MCP 目前都不能从项目配置中选择。`doctor` 会报告实际 transport 和凭据模式。
+当前配置支持使用环境变量 Token 的 Gitee REST API。将 `examples/issue-flow.example.yaml` 复制为 `.issue-flow.yaml`，填写 owner 和仓库路径，导出配置指定的 Token 环境变量，然后运行 `issue-flow doctor`。也可以通过 `--env-file .env` 显式传入权限为 0600 的 dotenv 文件；进程环境变量优先，文件内容仅按字面量解析，不执行 shell 展开。该只读检查会验证账号、仓库和配置的六个工作流标签；缺少标签时返回带标签名的 `CONFIG_ERROR`，不会自动创建。Provider 已使用统一访问接口：REST OAuth 具有可刷新外部凭据源边界；MCP 工厂在适配器尚未实现时返回 `UNSUPPORTED_CAPABILITY`。OAuth 和 MCP 目前都不能从项目配置中选择。`doctor` 会报告实际 transport 和凭据模式。
+
+可以从普通文件读取正文并创建一个 `ready` Issue：
+
+```bash
+issue-flow create --type bug --title "修复空白处理" --body-file issue.md
+```
+
+支持 `bug`、`feature` 和 `improvement` 三种类型。命令会附加配置的
+ready 标签和 `type:<type>` 标签；Provider 可能忽略不存在或 Token
+无权管理的标签。
 
 ## Agent 工作流
 

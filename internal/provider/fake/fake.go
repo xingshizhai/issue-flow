@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/xingshizhai/issue-flow/internal/domain"
 	"github.com/xingshizhai/issue-flow/internal/provider"
@@ -99,6 +100,40 @@ func (s *Store) GetIssue(ctx context.Context, number string) (domain.Issue, erro
 		}
 	}
 	return domain.Issue{}, fmt.Errorf("%w: %s", provider.ErrNotFound, number)
+}
+
+func (s *Store) CreateIssue(ctx context.Context, input provider.CreateIssueInput) (domain.Issue, error) {
+	var created domain.Issue
+	err := s.withLock(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		data, err := s.readUnlocked()
+		if err != nil {
+			return err
+		}
+		maximum := 0
+		for _, issue := range data.Issues {
+			if number, err := strconv.Atoi(issue.Number); err == nil && number > maximum {
+				maximum = number
+			}
+		}
+		now := time.Now().UTC()
+		created = domain.Issue{
+			ID: strconv.Itoa(maximum + 1), Number: strconv.Itoa(maximum + 1),
+			Title: input.Title, Body: input.Body, ProviderState: domain.ProviderStateOpen,
+			WorkflowState: domain.StateReady,
+			Labels:        []domain.Label{}, Assignees: []domain.Actor{}, Comments: []domain.Comment{},
+			Attachments: []domain.Attachment{}, Events: []domain.WorkflowEvent{},
+			Version: "1", CreatedAt: now, UpdatedAt: now,
+		}
+		for _, name := range input.Labels {
+			created.Labels = append(created.Labels, domain.Label{Name: name})
+		}
+		data.Issues = append(data.Issues, created)
+		return s.writeUnlocked(data)
+	})
+	return created, err
 }
 
 func (s *Store) read() (fileData, error) {

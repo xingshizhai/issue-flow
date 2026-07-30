@@ -149,6 +149,18 @@ func (p *Provider) GetIssue(ctx context.Context, number string) (domain.Issue, e
 	return result, nil
 }
 
+func (p *Provider) CreateIssue(ctx context.Context, input provider.CreateIssueInput) (domain.Issue, error) {
+	var created issueDTO
+	if _, err := p.client.Do(ctx, http.MethodPost,
+		"/repos/"+url.PathEscape(p.owner)+"/issues", nil, map[string]string{
+			"repo": p.repo, "title": input.Title, "body": input.Body,
+			"labels": strings.Join(input.Labels, ","),
+		}, &created); err != nil {
+		return domain.Issue{}, err
+	}
+	return p.GetIssue(ctx, created.Number)
+}
+
 func (p *Provider) UpdateIssue(ctx context.Context, number string, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
 	if err := provider.ValidateChange(change); err != nil {
 		return domain.Issue{}, err

@@ -728,6 +728,37 @@ func TestDryRunInitDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestCreatePersistsReadyTypedIssue(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	bodyPath := filepath.Join(project, "body.md")
+	if err := os.WriteFile(bodyPath, []byte("acceptance criteria"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke(
+		"create", "--type", "feature", "--title", "Add feature",
+		"--body-file", bodyPath, "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("create code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Number != "1" || envelope.Data.WorkflowState != domain.StateReady ||
+		envelope.Data.Body != "acceptance criteria" {
+		t.Fatalf("created issue = %+v", envelope.Data)
+	}
+	if len(envelope.Data.Labels) != 2 ||
+		envelope.Data.Labels[0].Name != "type:feature" ||
+		envelope.Data.Labels[1].Name != "agent:ready" {
+		t.Fatalf("labels = %+v", envelope.Data.Labels)
+	}
+}
+
 func invoke(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := (&cli{stdout: &stdout, stderr: &stderr}).run(context.Background(), args)

@@ -15,6 +15,7 @@ import (
 	"github.com/xingshizhai/issue-flow/internal/app"
 	"github.com/xingshizhai/issue-flow/internal/config"
 	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/envfile"
 	"github.com/xingshizhai/issue-flow/internal/output"
 	"github.com/xingshizhai/issue-flow/internal/provider"
 	"github.com/xingshizhai/issue-flow/internal/redact"
@@ -31,6 +32,7 @@ type cli struct {
 type globals struct {
 	config  string
 	project string
+	envFile string
 	format  string
 	dryRun  bool
 	verbose bool
@@ -61,6 +63,8 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.init(g, args[1:])
 	case "doctor":
 		return c.doctor(ctx, g, args[1:])
+	case "create":
+		return c.create(ctx, g, args[1:])
 	case "list":
 		return c.list(ctx, g, args[1:])
 	case "show":
@@ -72,6 +76,48 @@ func (c *cli) run(ctx context.Context, args []string) int {
 	default:
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("unknown command %q", args[0]), 2)
 	}
+}
+
+func (c *cli) create(ctx context.Context, g globals, args []string) int {
+	flags := flag.NewFlagSet("create", flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	title := flags.String("title", "", "issue title")
+	bodyFile := flags.String("body-file", "", "path to issue body")
+	issueType := flags.String("type", "", "bug, feature, or improvement")
+	if err := flags.Parse(args); err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	if flags.NArg() != 0 || strings.TrimSpace(*title) == "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("create requires --title and no positional arguments"), 2)
+	}
+	if *issueType != "bug" && *issueType != "feature" && *issueType != "improvement" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--type must be bug, feature, or improvement"), 2)
+	}
+	body, err := readSummaryFile(*bodyFile)
+	if err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	input := provider.CreateIssueInput{
+		Title: strings.TrimSpace(*title), Body: body,
+		Labels: []string{"type:" + *issueType, runtime.Config.Workflow.ReadyLabel},
+	}
+	if g.dryRun {
+		return c.success(g.format, input, "Would create issue: "+input.Title)
+	}
+	creator, ok := runtime.Provider.(provider.IssueCreator)
+	if !ok {
+		return c.fail(g.format, "UNSUPPORTED_CAPABILITY", provider.ErrUnsupported, 6)
+	}
+	issue, err := creator.CreateIssue(ctx, input)
+	if err != nil {
+		return c.providerFailure(g.format, err)
+	}
+	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
+	return c.success(g.format, issue, fmt.Sprintf("#%s %s", issue.Number, issue.Title))
 }
 
 func (c *cli) context(ctx context.Context, g globals, args []string) int {
@@ -379,7 +425,21 @@ func validIssueReference(value string) bool {
 }
 
 func (c *cli) open(g globals) (*app.Runtime, int) {
-	runtime, err := app.Open(g.config, g.project)
+	lookup := os.LookupEnv
+	if g.envFile != "" {
+		values, err := envfile.Load(g.envFile)
+		if err != nil {
+			return nil, c.fail(g.format, "CONFIG_ERROR", err, 2)
+		}
+		lookup = func(key string) (string, bool) {
+			if value, ok := os.LookupEnv(key); ok {
+				return value, true
+			}
+			value, ok := values[key]
+			return value, ok
+		}
+	}
+	runtime, err := app.OpenWithLookup(g.config, g.project, lookup)
 	if err != nil {
 		return nil, c.fail(g.format, "CONFIG_ERROR", err, 2)
 	}
@@ -480,6 +540,7 @@ Usage:
 Commands:
   init       Create a safe default configuration
   doctor     Validate configuration and inspect provider capabilities
+  create     Create a ready bug, feature, or improvement issue
   list       List issues
   show       Show one issue
   context    Build normalized agent context
@@ -496,6 +557,7 @@ Commands:
 Global flags (accepted before or after the command):
   --config <path>
   --project <path>
+  --env-file <path>
   --format text|json
   --json
   --dry-run
@@ -514,7 +576,7 @@ func parseGlobals(args []string) (globals, []string, error) {
 			g.dryRun = true
 		case arg == "--verbose":
 			g.verbose = true
-		case arg == "--config" || arg == "--project" || arg == "--format":
+		case arg == "--config" || arg == "--project" || arg == "--env-file" || arg == "--format":
 			if i+1 >= len(args) {
 				return g, nil, fmt.Errorf("%s requires a value", arg)
 			}
@@ -524,6 +586,8 @@ func parseGlobals(args []string) (globals, []string, error) {
 				g.config = args[i]
 			case "--project":
 				g.project = args[i]
+			case "--env-file":
+				g.envFile = args[i]
 			case "--format":
 				g.format = args[i]
 			}
@@ -531,6 +595,8 @@ func parseGlobals(args []string) (globals, []string, error) {
 			g.config = strings.TrimPrefix(arg, "--config=")
 		case strings.HasPrefix(arg, "--project="):
 			g.project = strings.TrimPrefix(arg, "--project=")
+		case strings.HasPrefix(arg, "--env-file="):
+			g.envFile = strings.TrimPrefix(arg, "--env-file=")
 		case strings.HasPrefix(arg, "--format="):
 			g.format = strings.TrimPrefix(arg, "--format=")
 		default:
