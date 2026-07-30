@@ -24,7 +24,12 @@ type Runtime struct {
 }
 
 func (r *Runtime) Workflow() *workflow.Service {
-	return workflow.New(r.Provider, clock.Real{}, time.Duration(r.Config.Workflow.LeaseMinutes)*time.Minute)
+	return workflow.NewWithRedactKeys(
+		r.Provider,
+		clock.Real{},
+		time.Duration(r.Config.Workflow.LeaseMinutes)*time.Minute,
+		r.Config.Security.RedactKeys,
+	)
 }
 
 func Open(configPath, project string) (*Runtime, error) {

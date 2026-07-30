@@ -17,6 +17,7 @@ import (
 	"issue-flow/internal/domain"
 	"issue-flow/internal/output"
 	"issue-flow/internal/provider"
+	"issue-flow/internal/redact"
 	"issue-flow/internal/workflow"
 )
 
@@ -180,7 +181,7 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	if err != nil {
 		return c.workflowFailure(g.format, opID, err)
 	}
-	result.Issue = result.Issue.Public()
+	result.Issue = redact.New(runtime.Config.Security.RedactKeys).Issue(result.Issue.Public())
 	text := fmt.Sprintf("#%s is now %s", result.Issue.Number, result.Issue.WorkflowState)
 	if result.Issue.Lease != nil {
 		text += fmt.Sprintf("\nAgent: %s\nExpires: %s",
@@ -306,10 +307,11 @@ func (c *cli) list(ctx context.Context, g globals, args []string) int {
 	if err != nil {
 		return c.providerFailure(g.format, err)
 	}
+	sanitizer := redact.New(runtime.Config.Security.RedactKeys)
+	for i := range page.Items {
+		page.Items[i] = sanitizer.Issue(page.Items[i].Public())
+	}
 	if g.format == "json" {
-		for i := range page.Items {
-			page.Items[i] = page.Items[i].Public()
-		}
 		return c.success(g.format, page, "")
 	}
 	for _, issue := range page.Items {
@@ -337,9 +339,10 @@ func (c *cli) show(ctx context.Context, g globals, args []string) int {
 	if err != nil {
 		return c.providerFailure(g.format, err)
 	}
+	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
 	text := fmt.Sprintf("#%s %s\nState: %s\nURL: %s\n\n%s",
 		issue.Number, issue.Title, issue.WorkflowState, issue.URL, issue.Body)
-	return c.success(g.format, issue.Public(), text)
+	return c.success(g.format, issue, text)
 }
 
 func validIssueReference(value string) bool {

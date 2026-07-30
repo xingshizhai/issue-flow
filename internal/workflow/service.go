@@ -12,6 +12,7 @@ import (
 	"issue-flow/internal/clock"
 	"issue-flow/internal/domain"
 	"issue-flow/internal/provider"
+	"issue-flow/internal/redact"
 )
 
 var (
@@ -26,6 +27,7 @@ type Service struct {
 	clock         clock.Clock
 	leaseDuration time.Duration
 	newToken      func() (string, error)
+	redactor      redact.Redactor
 }
 
 type Result struct {
@@ -35,7 +37,14 @@ type Result struct {
 }
 
 func New(p provider.Provider, c clock.Clock, leaseDuration time.Duration) *Service {
-	return &Service{provider: p, clock: c, leaseDuration: leaseDuration, newToken: randomToken}
+	return NewWithRedactKeys(p, c, leaseDuration, nil)
+}
+
+func NewWithRedactKeys(p provider.Provider, c clock.Clock, leaseDuration time.Duration, keys []string) *Service {
+	return &Service{
+		provider: p, clock: c, leaseDuration: leaseDuration,
+		newToken: randomToken, redactor: redact.New(keys),
+	}
 }
 
 func (s *Service) Claim(ctx context.Context, number, agentID, operationID string, dryRun bool) (Result, error) {
@@ -106,7 +115,7 @@ func (s *Service) Progress(ctx context.Context, number, agentID, token, operatio
 	change := provider.IssueChange{
 		Event: domain.WorkflowEvent{
 			Version: 1, OperationID: operationID, Operation: "progress",
-			AgentID: agentID, LeaseID: current.Lease.ID, Message: message,
+			AgentID: agentID, LeaseID: current.Lease.ID, Message: s.redactor.String(message),
 			From: current.WorkflowState, To: current.WorkflowState, OccurredAt: now,
 			ExpiresAt: current.Lease.ExpiresAt,
 		},
@@ -197,7 +206,7 @@ func (s *Service) holderTransition(
 		WorkflowState: &next,
 		Event: domain.WorkflowEvent{
 			Version: 1, OperationID: operationID, Operation: operation,
-			AgentID: agentID, LeaseID: current.Lease.ID, Message: message,
+			AgentID: agentID, LeaseID: current.Lease.ID, Message: s.redactor.String(message),
 			From: current.WorkflowState, To: next, OccurredAt: now,
 			ExpiresAt: current.Lease.ExpiresAt,
 		},

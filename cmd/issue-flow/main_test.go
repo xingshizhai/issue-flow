@@ -237,6 +237,48 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 	}
 }
 
+func TestIssueOutputAndProgressWritesAreRedacted(t *testing.T) {
+	t.Parallel()
+
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "token=title-secret",
+		Body: "password=body-secret", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke("show", "1", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("show code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, secret := range []string{"title-secret", "body-secret"} {
+		if strings.Contains(stdout, secret) {
+			t.Errorf("show output leaked %q: %s", secret, stdout)
+		}
+	}
+
+	code, stdout, stderr = invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("claim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	token := leaseTokenFromEnvelope(t, stdout)
+	code, stdout, stderr = invoke(
+		"progress", "1", "--agent", "codex-a", "--lease-token", token,
+		"--message", "api_key=write-secret", "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("progress code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	rawStore, err := os.ReadFile(filepath.Join(project, "issues.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rawStore), "write-secret") {
+		t.Fatalf("progress persisted a secret: %s", rawStore)
+	}
+	if !strings.Contains(string(rawStore), "[REDACTED]") {
+		t.Fatalf("progress did not persist a redaction marker: %s", rawStore)
+	}
+}
+
 func TestFinishRejectsSymlinkSummary(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{

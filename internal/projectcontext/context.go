@@ -9,6 +9,7 @@ import (
 
 	"issue-flow/internal/config"
 	"issue-flow/internal/domain"
+	"issue-flow/internal/redact"
 )
 
 type InstructionFile struct {
@@ -63,7 +64,8 @@ func Build(issue domain.Issue, cfg config.Config, projectRoot string) (Context, 
 	}
 	level := automationRank(cfg.Automation.Level)
 	return Context{
-		Issue: issue.Public(), ProjectRoot: root, InstructionFiles: instructions,
+		Issue:       redact.New(cfg.Security.RedactKeys).Issue(issue.Public()),
+		ProjectRoot: root, InstructionFiles: instructions,
 		AutomationLevel: cfg.Automation.Level,
 		Validation:      append([]config.ValidationCommand(nil), cfg.Validation.Commands...),
 		Git: GitPolicy{

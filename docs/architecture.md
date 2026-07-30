@@ -366,6 +366,11 @@ Issue 标题、正文、评论和附件内容都是不可信数据。Agent Skill
 
 日志中不得输出完整 HTTP 请求头或请求体。调试模式也遵守相同规则。
 
+CLI 在 `show/list/context` 和工作流结果输出前，对 Issue 标题、正文、URL、评论、
+附件及事件消息执行配置驱动的模式脱敏。`progress/block/release/finish` 的自由文本
+在进入 Provider 前执行同一脱敏，避免秘密被写入 Issue。脱敏不修改 Issue 编号、
+状态、标签和租约等协议字段。
+
 ### 12.4 Web Gateway
 
 第二阶段 Gateway 需增加：
