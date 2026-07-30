@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
-	"issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/provider"
 )
 
 type Provider struct {

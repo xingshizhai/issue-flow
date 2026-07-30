@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 )
 
 func TestSameOperationIgnoresDeliveryTimingButNotSemantics(t *testing.T) {

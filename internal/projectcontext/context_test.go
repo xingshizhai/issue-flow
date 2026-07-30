@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 )
 
 func TestBuildContext(t *testing.T) {

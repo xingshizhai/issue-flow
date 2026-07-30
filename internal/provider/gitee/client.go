@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"issue-flow/internal/provider"
-	"issue-flow/internal/redact"
+	"github.com/xingshizhai/issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/redact"
 )
 
 const defaultBaseURL = "https://gitee.com/api/v5"

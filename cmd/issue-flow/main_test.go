@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"issue-flow/internal/domain"
-	"issue-flow/internal/output"
-	"issue-flow/internal/provider"
-	"issue-flow/internal/workflow"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/output"
+	"github.com/xingshizhai/issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/workflow"
 )
 
 func TestCLIHelperProcess(t *testing.T) {

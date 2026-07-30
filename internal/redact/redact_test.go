@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 )
 
 func TestStringRedactsConfiguredAndDefaultPatterns(t *testing.T) {

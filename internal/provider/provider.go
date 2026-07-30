@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 )
 
 var (

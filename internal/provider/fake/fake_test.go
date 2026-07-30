@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"issue-flow/internal/domain"
-	"issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/provider"
 )
 
 func TestListFiltersAndPaginates(t *testing.T) {

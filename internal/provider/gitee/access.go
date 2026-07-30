@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/provider"
 )
 
 const (

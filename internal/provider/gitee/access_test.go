@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/provider"
 )
 
 type rotatingOAuthSource struct {

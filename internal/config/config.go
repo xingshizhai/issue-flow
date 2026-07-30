@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xingshizhai/issue-flow/internal/domain"
 	"gopkg.in/yaml.v3"
-	"issue-flow/internal/domain"
 )
 
 const (

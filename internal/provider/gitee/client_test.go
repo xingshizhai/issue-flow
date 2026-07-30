@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/provider"
 )
 
 func TestClientMapsErrorsWithoutLeakingToken(t *testing.T) {

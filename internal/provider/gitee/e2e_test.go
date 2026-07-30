@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"issue-flow/internal/clock"
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
-	"issue-flow/internal/workflow"
+	"github.com/xingshizhai/issue-flow/internal/clock"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/workflow"
 )
 
 func TestGiteeE2E(t *testing.T) {

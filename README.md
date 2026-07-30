@@ -8,18 +8,26 @@ Issue Flow gives coding agents a deterministic workflow for automatically handli
 
 Run `make check` before submitting changes. It checks formatting, unit and integration tests, the race detector, and `go vet`; GitHub CI repeats these checks and builds on Linux, macOS, and Windows.
 
-Create unsigned local snapshot binaries with `make snapshot VERSION=0.1.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts. A formal module path, release host, signing policy, and supported architecture matrix must be decided before a public release.
+Create unsigned local snapshot binaries with `make snapshot VERSION=0.1.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts.
+
+SemVer tags matching `vX.Y.Z` trigger the GitHub release workflow after checks pass. It publishes those binaries and checksums and generates GitHub artifact attestations.
 
 ## Install
 
-Build from a trusted checkout until a Go module path and releases are published:
+Build from a trusted checkout until the first release is published:
 
 ```bash
 go build -o ./bin/issue-flow ./cmd/issue-flow
 ./bin/issue-flow --help
 ```
 
-Do not invent a module URL or download location. Inspect `go.mod` and release instructions first.
+The canonical module path is `github.com/xingshizhai/issue-flow`. After the first public release, install a pinned version:
+
+```bash
+go install github.com/xingshizhai/issue-flow/cmd/issue-flow@vX.Y.Z
+```
+
+Do not use `@latest` in unattended automation. Verify downloaded release binaries with both `sha256sum` and `gh attestation verify <binary> -R xingshizhai/issue-flow`.
 
 ## Configure Gitee access
 

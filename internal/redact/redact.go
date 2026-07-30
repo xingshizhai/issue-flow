@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 )
 
 const replacement = "[REDACTED]"

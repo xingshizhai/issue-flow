@@ -1,4 +1,4 @@
-module issue-flow
+module github.com/xingshizhai/issue-flow
 
 go 1.24
 

@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"issue-flow/internal/clock"
-	"issue-flow/internal/config"
-	"issue-flow/internal/projectcontext"
-	"issue-flow/internal/provider"
-	"issue-flow/internal/provider/fake"
-	"issue-flow/internal/provider/gitee"
-	"issue-flow/internal/workflow"
+	"github.com/xingshizhai/issue-flow/internal/clock"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/projectcontext"
+	"github.com/xingshizhai/issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/provider/fake"
+	"github.com/xingshizhai/issue-flow/internal/provider/gitee"
+	"github.com/xingshizhai/issue-flow/internal/workflow"
 )
 
 type Runtime struct {

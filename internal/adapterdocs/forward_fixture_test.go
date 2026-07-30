@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
-	"issue-flow/internal/provider"
-	"issue-flow/internal/provider/fake"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/provider/fake"
 )
 
 func TestSkillForwardFixtureStartsReadyAndFailing(t *testing.T) {

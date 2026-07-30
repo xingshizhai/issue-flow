@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
-	"issue-flow/internal/redact"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/redact"
 )
 
 type InstructionFile struct {

@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"issue-flow/internal/app"
-	"issue-flow/internal/config"
-	"issue-flow/internal/domain"
-	"issue-flow/internal/output"
-	"issue-flow/internal/provider"
-	"issue-flow/internal/redact"
-	"issue-flow/internal/workflow"
+	"github.com/xingshizhai/issue-flow/internal/app"
+	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
+	"github.com/xingshizhai/issue-flow/internal/output"
+	"github.com/xingshizhai/issue-flow/internal/provider"
+	"github.com/xingshizhai/issue-flow/internal/redact"
+	"github.com/xingshizhai/issue-flow/internal/workflow"
 )
 
 var version = "0.1.0-dev"
