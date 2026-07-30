@@ -31,7 +31,26 @@ issue-flow claim 123 --agent "<stable-agent-id>" --format json
 issue-flow start 123 --agent "<stable-agent-id>" --lease-token "<claim-token>" --format json
 ```
 
-Proceed only when claim returns a plaintext `leaseToken`, the expected Issue, and a lease owned by the stable agent ID. A failed or ambiguous response does not establish ownership.
+The successful claim response shape is:
+
+```text
+data.leaseToken
+data.issue.number
+data.issue.lease.agentId
+```
+
+Do not assume a top-level `data.lease` or an `agent` field. Before parsing, save
+the complete successful claim response to a mode-0600 temporary file outside the
+project. Validate `data.issue.number` and `data.issue.lease.agentId`, then read
+`data.leaseToken` without printing it. Keep that protected response file for the
+entire lease and read the token from it for `start`, `heartbeat`, `progress`, and
+the terminal command. Delete it only after `finish`, `block`, or `release`
+succeeds. This ordering preserves the one-time token if schema validation or a
+later local command fails.
+
+Proceed only when claim returns a plaintext `leaseToken`, the expected Issue,
+and a lease owned by the stable agent ID. A failed or ambiguous response does
+not establish ownership.
 
 ## Work and renew
 

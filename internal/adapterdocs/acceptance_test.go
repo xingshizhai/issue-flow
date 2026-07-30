@@ -16,9 +16,10 @@ func TestMVPAcceptanceRecordTracksEveryCriterion(t *testing.T) {
 			t.Errorf("acceptance record is missing criterion %d", number)
 		}
 	}
-	if !strings.Contains(record, "Ready, not executed") ||
+	if !strings.Contains(record, "Codex CLI 0.146.0") ||
+		!strings.Contains(record, "| Pass |") ||
 		!strings.Contains(record, "skill-forward-test.md") {
-		t.Error("acceptance record must keep the fresh-session test explicitly pending")
+		t.Error("acceptance record must retain the successful fresh-session evidence")
 	}
 }
 
