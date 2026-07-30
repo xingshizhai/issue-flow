@@ -109,3 +109,36 @@ func TestGetIssueNotFound(t *testing.T) {
 		t.Fatalf("GetIssue() error = %v", err)
 	}
 }
+
+func TestUpdateRejectsOperationIDSemanticCollision(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "issues.json")
+	existing := domain.WorkflowEvent{
+		Version: 1, OperationID: "op_same", Operation: "progress",
+		AgentID: "agent-a", LeaseID: "lease_1", Message: "first",
+		From: domain.StateWorking, To: domain.StateWorking,
+	}
+	data := fileData{Version: 1, Issues: []domain.Issue{{
+		Number: "1", WorkflowState: domain.StateWorking, Version: "2",
+		Events: []domain.WorkflowEvent{existing},
+	}}}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed := existing
+	changed.Message = "different"
+	_, err = New(path).UpdateIssue(
+		context.Background(),
+		"1",
+		provider.IssueChange{Event: changed},
+		provider.Precondition{Version: "2"},
+	)
+	if !errors.Is(err, provider.ErrPreconditionFailed) {
+		t.Fatalf("error = %v", err)
+	}
+}

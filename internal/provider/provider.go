@@ -57,6 +57,16 @@ type IssueChange struct {
 	Event         domain.WorkflowEvent
 }
 
+func SameOperation(existing, requested domain.WorkflowEvent) bool {
+	return existing.OperationID == requested.OperationID &&
+		existing.Operation == requested.Operation &&
+		existing.AgentID == requested.AgentID &&
+		existing.LeaseID == requested.LeaseID &&
+		existing.Message == requested.Message &&
+		existing.From == requested.From &&
+		existing.To == requested.To
+}
+
 type IssueWriter interface {
 	UpdateIssue(context.Context, string, IssueChange, Precondition) (domain.Issue, error)
 }

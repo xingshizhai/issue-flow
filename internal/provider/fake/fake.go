@@ -149,6 +149,10 @@ func (s *Store) UpdateIssue(ctx context.Context, number string, change provider.
 		current := data.Issues[index]
 		for _, event := range current.Events {
 			if event.OperationID == change.Event.OperationID {
+				if !provider.SameOperation(event, change.Event) {
+					return fmt.Errorf("%w: operation ID is already used with different semantics",
+						provider.ErrPreconditionFailed)
+				}
 				updated = current
 				return nil
 			}

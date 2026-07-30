@@ -154,17 +154,14 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 	if err != nil {
 		return domain.Issue{}, err
 	}
-	if precondition.Version != "" && current.Version != precondition.Version {
-		return domain.Issue{}, fmt.Errorf("%w: version changed", provider.ErrPreconditionFailed)
-	}
-	if precondition.WorkflowState != "" && current.WorkflowState != precondition.WorkflowState {
-		return domain.Issue{}, fmt.Errorf("%w: state is %s", provider.ErrPreconditionFailed, current.WorkflowState)
-	}
-	if precondition.LeaseID != "" && (current.Lease == nil || current.Lease.ID != precondition.LeaseID) {
-		return domain.Issue{}, fmt.Errorf("%w: lease changed", provider.ErrPreconditionFailed)
-	}
 	for _, event := range current.Events {
 		if event.OperationID == change.Event.OperationID {
+			if !provider.SameOperation(event, change.Event) {
+				return domain.Issue{}, fmt.Errorf(
+					"%w: operation ID is already used with different semantics",
+					provider.ErrPreconditionFailed,
+				)
+			}
 			if change.WorkflowState != nil && !p.hasWorkflowLabel(current.Labels, *change.WorkflowState) {
 				labels := p.replaceWorkflowLabel(current.Labels, *change.WorkflowState)
 				if _, err := p.client.Do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
@@ -174,6 +171,15 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 			}
 			return current, nil
 		}
+	}
+	if precondition.Version != "" && current.Version != precondition.Version {
+		return domain.Issue{}, fmt.Errorf("%w: version changed", provider.ErrPreconditionFailed)
+	}
+	if precondition.WorkflowState != "" && current.WorkflowState != precondition.WorkflowState {
+		return domain.Issue{}, fmt.Errorf("%w: state is %s", provider.ErrPreconditionFailed, current.WorkflowState)
+	}
+	if precondition.LeaseID != "" && (current.Lease == nil || current.Lease.ID != precondition.LeaseID) {
+		return domain.Issue{}, fmt.Errorf("%w: lease changed", provider.ErrPreconditionFailed)
 	}
 	eventBody, err := encodeEvent(change)
 	if err != nil {

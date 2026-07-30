@@ -346,6 +346,10 @@ Workflow 在 claim 写入后的重读结果上再次验证 lease ID、agent ID �
 在鉴权和状态转换前识别已完成的同命令、同 Agent 事件并返回现状，不再次写
 Provider。跨命令或跨 Agent 的 ID 冲突返回 `INVALID_ARGUMENT`。
 
+Fake 和 Gitee Provider 也必须独立校验 operation ID 对应的 operation、agent、
+lease、message 和状态转换语义。语义不同的重复 ID 返回前置条件冲突且不得产生
+任何写入；因此绕过 Workflow 直接调用 Provider 也不能削弱幂等约束。
+
 claim 是例外：明文租约 token 只返回一次。已落盘 claim 的重放返回
 `LEASE_CONFLICT`，不能恢复 token；调用方不得通过新 claim 猜测所有权。
 
