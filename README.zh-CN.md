@@ -29,6 +29,93 @@ go install github.com/xingshizhai/issue-flow/cmd/issue-flow@vX.Y.Z
 
 无人值守自动化中不要使用 `@latest`。下载发布二进制后，应同时使用 `sha256sum` 和 `gh attestation verify <binary> -R xingshizhai/issue-flow` 验证。
 
+## AI Agent 快速开始
+
+当 Agent 第一次接入 Issue Flow 时，按下面顺序执行。命令默认在 Issue
+Flow 可信检出目录中运行；如果使用已安装的命令，将 `./bin/issue-flow`
+替换为 `issue-flow`。
+
+### 1. 构建并检查可信二进制
+
+```bash
+go build -o ./bin/issue-flow ./cmd/issue-flow
+./bin/issue-flow version
+```
+
+不要下载或执行未固定版本的二进制；没有 Go 时使用已校验的发布产物。
+
+### 2. 先用 Fake Provider 演练
+
+该流程不需要网络和 Token：
+
+```bash
+mkdir -p issue-flow-demo
+./bin/issue-flow init --project issue-flow-demo
+cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
+./bin/issue-flow doctor --project issue-flow-demo --format json
+./bin/issue-flow list --project issue-flow-demo --ready --format json
+```
+
+`doctor` 失败时先修复配置，不要领取 Issue。Fake Provider 适合学习工作流
+和测试 `--dry-run`。
+
+### 3. 配置获准使用的 Gitee 项目
+
+```bash
+cp examples/issue-flow.example.yaml .issue-flow.yaml
+cp .env.example .env
+chmod 600 .env .issue-flow.yaml
+# 编辑 .issue-flow.yaml：填写 provider.owner、provider.repo，必要时调整标签。
+# 编辑 .env：填写个人 API Token 的 GITEE_TOKEN。
+./bin/issue-flow doctor --project . --env-file .env --format json
+```
+
+`.env` 已被 Git 忽略。Token 不得写入 YAML、Issue、命令输出、摘要文件或提交。
+进程环境变量优先于 `--env-file`，dotenv 内容按字面量解析，不执行 shell 表达式。
+只有明确获准的测试仓库才允许真实写入。
+
+### 4. 让 Agent 处理一个 Issue
+
+```text
+读取 AGENTS.md 及 context 列出的指令文件
+doctor → list --ready → show → context
+claim → start → 检查和修改代码 → 按 validation argv 测试
+progress → finish → 人工审核 → complete
+```
+
+成功 claim 的一次性 Token 位于 `data.leaseToken`，Issue 位于 `data.issue`，
+租约 Agent ID 位于 `data.issue.lease.agentId`。将完整 claim 响应保存到项目外
+权限为 0600 的文件中，在 `finish`、`block` 或 `release` 成功前保留；不要打印或提交 Token：
+
+```bash
+./bin/issue-flow claim 123 --agent "agent-id" --project . --format json
+./bin/issue-flow start 123 --agent "agent-id" --lease-token "<token>" --project . --format json
+./bin/issue-flow finish 123 --agent "agent-id" --lease-token "<token>" --summary-file result.md --project . --format json
+./bin/issue-flow complete 123 --reviewer "reviewer-id" --conclusion-file review.md --project . --format json
+```
+
+`finish` 将 Issue 转为 `review`；`complete` 记录人工审核并转为 `done`。
+只有显式设置 `workflow.auto_close: true` 时，Gitee 原生状态才会同步关闭。
+
+### 5. 从文件创建 Issue
+
+```bash
+./bin/issue-flow create --type bug --title "简短标题" --body-file issue.md --project . --env-file .env --format json
+```
+
+正文文件必须普通且不含秘密。`bug` 映射为 Gitee 原生“缺陷”，`feature` 和
+`improvement` 映射为“需求”。
+
+### 常见错误
+
+| 现象 | 处理 |
+|---|---|
+| `CONFIG_ERROR` | 执行 `doctor --format json`，检查项目路径、YAML、`.env` 的 0600 权限和 `GITEE_TOKEN`。 |
+| 缺少工作流标签 | 使用仓库已有标签或请管理员创建；`doctor` 不会隐式创建标签。 |
+| `LEASE_CONFLICT` | 不要抢占活动租约或猜测丢失的 Token，等待维护者在过期后 reclaim。 |
+| `RATE_LIMITED` / `PROVIDER_UNAVAILABLE` | 使用返回的 `--operation-id` 原样重试同一命令。 |
+| Gitee 仍显示初始状态 | 对显式 `complete` 启用 `workflow.auto_close`；标签和 Gitee 原生状态是两个字段。 |
+
 ## 配置 Gitee 访问
 
 ```bash
@@ -139,9 +226,9 @@ cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
 
 所有环境共享同一 CLI 和 JSON 契约。仓库已提供 [Codex Skill](skills/issue-flow/SKILL.md)，以及基于[通用 Agent 契约](adapters/generic/agent-workflow.md)的 [Claude Code](adapters/claude/CLAUDE.md)、[Cursor](adapters/cursor/issue-flow.mdc)和 [VS Code](adapters/vscode/issue-flow.instructions.md)薄适配器。参阅[需求规格](docs/requirements.md)和[技术方案](docs/architecture.md)。
 
-使用 [Skill 隔离前向测试指南](docs/skill-forward-test.md)评估全新的 Agent 会话。自动测试会保证受版本控制的夹具始终处于 ready 且初始验证失败的状态；评估 Agent 行为仍必须实际运行全新会话。
+使用 [Skill 隔离前向测试指南](docs/skill-forward-test.md)评估全新的 Agent 会话。自动测试会保证受版本控制的夹具始终处于 ready 且初始验证失败的状态；最新的全新会话结果已记录在 [MVP 验收记录](docs/mvp-acceptance.md) 中。
 
-[MVP 验收记录](docs/mvp-acceptance.md)将每条需求映射到当前证据，并列出尚待执行的人工验收项。
+[MVP 验收记录](docs/mvp-acceptance.md)将每条需求映射到当前证据。
 
 真实 Gitee 测试默认跳过。只有同时显式设置 `ISSUE_FLOW_GITEE_E2E=1`、`GITEE_TOKEN`、`GITEE_OWNER` 和 `GITEE_REPO` 时才会运行，并会在获准的测试仓库中创建一个 Issue。
 测试通常会确保六个工作流标签存在，这一步在企业仓库中可能需要企业管理员权限。`GITEE_E2E_USE_EXISTING_LABELS=1` 只用于隔离的测试仓库，会临时映射六个标准标签，不能作为生产工作流配置。

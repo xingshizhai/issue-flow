@@ -29,6 +29,107 @@ go install github.com/xingshizhai/issue-flow/cmd/issue-flow@vX.Y.Z
 
 Do not use `@latest` in unattended automation. Verify downloaded release binaries with both `sha256sum` and `gh attestation verify <binary> -R xingshizhai/issue-flow`.
 
+## AI Agent quickstart
+
+Use this section when an Agent has just been asked to set up Issue Flow in a
+project. Run commands from the Issue Flow checkout or replace `./bin/issue-flow`
+with the installed binary name.
+
+### 1. Build and check the trusted binary
+
+```bash
+go build -o ./bin/issue-flow ./cmd/issue-flow
+./bin/issue-flow version
+```
+
+Do not download or execute an unpinned binary. If Go is unavailable, use a
+verified release artifact instead.
+
+### 2. Start with a local Fake Provider
+
+This path is deterministic and needs no network or credentials:
+
+```bash
+mkdir -p issue-flow-demo
+./bin/issue-flow init --project issue-flow-demo
+cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
+./bin/issue-flow doctor --project issue-flow-demo --format json
+./bin/issue-flow list --project issue-flow-demo --ready --format json
+```
+
+If `doctor` is not successful, stop and fix the configuration before claiming
+an Issue. The Fake Provider is the safe place to learn the workflow and test
+`--dry-run`.
+
+### 3. Configure an authorized Gitee project
+
+Copy the example, then edit only the owner, repository, and workflow settings:
+
+```bash
+cp examples/issue-flow.example.yaml .issue-flow.yaml
+cp .env.example .env
+chmod 600 .env .issue-flow.yaml
+# Edit .issue-flow.yaml: provider.owner, provider.repo, and (if needed) labels.
+# Edit .env and set GITEE_TOKEN to the personal API token.
+./bin/issue-flow doctor --project . --env-file .env --format json
+```
+
+The `.env` file is ignored by Git. Never paste a token into YAML, an Issue,
+the shell transcript, a summary file, or a commit. Process environment
+variables override values from `--env-file`; the dotenv parser does not execute
+shell expressions. Use real writes only for a repository explicitly authorized
+for testing.
+
+### 4. Let the Agent process one Issue
+
+The minimum safe sequence is:
+
+```text
+read AGENTS.md and the files named by context
+doctor → list --ready → show → context
+claim → start → inspect and edit → run validation argv
+progress → finish → human review → complete
+```
+
+Use JSON for automation. A successful claim stores its one-time token at
+`data.leaseToken`; the Issue and lease are at `data.issue` and
+`data.issue.lease.agentId`. Save the complete claim response in a mode-0600
+file outside the project and keep it until `finish`, `block`, or `release`
+succeeds. Never print or commit the token:
+
+```bash
+./bin/issue-flow claim 123 --agent "agent-id" --project . --format json
+./bin/issue-flow start 123 --agent "agent-id" --lease-token "<token>" --project . --format json
+./bin/issue-flow finish 123 --agent "agent-id" --lease-token "<token>" --summary-file result.md --project . --format json
+./bin/issue-flow complete 123 --reviewer "reviewer-id" --conclusion-file review.md --project . --format json
+```
+
+`finish` moves an Issue to `review`. `complete` records explicit human review
+and moves it to `done`; Gitee native closure additionally requires
+`workflow.auto_close: true`. If a task cannot finish, use `block` or `release`
+while the lease token is still available.
+
+### 5. Create an Issue from a file
+
+Keep the body in a regular, secret-free file and let Issue Flow add the ready
+and type metadata:
+
+```bash
+./bin/issue-flow create --type bug --title "Short title" --body-file issue.md --project . --env-file .env --format json
+```
+
+`bug` maps to Gitee native `缺陷`; `feature` and `improvement` map to `需求`.
+
+### Common failures
+
+| Symptom | Action |
+|---|---|
+| `CONFIG_ERROR` | Run `doctor --format json`; check the project path, YAML, `.env` mode `0600`, and `GITEE_TOKEN`. |
+| Missing workflow labels | Use labels already available in the repository or have an authorized administrator create them; `doctor` never creates labels implicitly. |
+| `LEASE_CONFLICT` | Do not reclaim an active lease or guess a lost token; wait for the maintainer to reclaim it after expiry. |
+| `RATE_LIMITED` / `PROVIDER_UNAVAILABLE` | Retry the exact same command with its returned `--operation-id`. |
+| Gitee still shows the initial native state | Enable `workflow.auto_close` for explicit `complete`; labels and native Gitee status are separate fields. |
+
 ## Configure Gitee access
 
 ```bash
@@ -140,9 +241,9 @@ For safety, `provider.data_file` must be a plain filename directly inside the co
 
 All environments share the same CLI and JSON contract. The repository includes a [Codex Skill](skills/issue-flow/SKILL.md) and thin [Claude Code](adapters/claude/CLAUDE.md), [Cursor](adapters/cursor/issue-flow.mdc), and [VS Code](adapters/vscode/issue-flow.instructions.md) adapters based on the [shared agent contract](adapters/generic/agent-workflow.md). See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
-Use the [isolated Skill forward-test guide](docs/skill-forward-test.md) to evaluate a fresh agent session. The tracked fixture is automatically checked to remain ready and initially failing; an actual fresh-session run is still required to evaluate agent behavior.
+Use the [isolated Skill forward-test guide](docs/skill-forward-test.md) to evaluate a fresh agent session. The tracked fixture is automatically checked to remain ready and initially failing; the latest fresh-session result is recorded in the [MVP acceptance record](docs/mvp-acceptance.md).
 
-The [MVP acceptance record](docs/mvp-acceptance.md) links every requirement to its current evidence and lists the remaining manual acceptance action.
+The [MVP acceptance record](docs/mvp-acceptance.md) links every requirement to its current evidence.
 
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.
 The test normally ensures the six configured workflow labels exist, which can require enterprise administrator permission. `GITEE_E2E_USE_EXISTING_LABELS=1` is available only for an isolated test repository and temporarily maps six standard labels; it must not be used as a production workflow configuration.
