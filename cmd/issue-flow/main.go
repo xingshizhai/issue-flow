@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"issue-flow/internal/app"
@@ -75,8 +74,8 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	if len(args) == 0 {
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("%s requires one issue number", command), 2)
 	}
-	number, err := strconv.Atoi(args[0])
-	if err != nil || number <= 0 {
+	number := args[0]
+	if !validIssueReference(number) {
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("invalid issue number %q", args[0]), 2)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -103,6 +102,7 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	opID := operationID()
 	service := runtime.Workflow()
 	var result workflow.Result
+	var err error
 	switch command {
 	case "claim":
 		result, err = service.Claim(ctx, number, *agentID, opID, g.dryRun)
@@ -119,7 +119,7 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 		return c.workflowFailure(g.format, opID, err)
 	}
 	result.Issue = result.Issue.Public()
-	text := fmt.Sprintf("#%d is now %s", result.Issue.Number, result.Issue.WorkflowState)
+	text := fmt.Sprintf("#%s is now %s", result.Issue.Number, result.Issue.WorkflowState)
 	if result.Issue.Lease != nil {
 		text += fmt.Sprintf("\nAgent: %s\nExpires: %s",
 			result.Issue.Lease.AgentID,
@@ -173,7 +173,10 @@ func (c *cli) doctor(ctx context.Context, g globals, args []string) int {
 	if runtime == nil {
 		return code
 	}
-	result := runtime.Doctor(ctx)
+	result, err := runtime.Doctor(ctx)
+	if err != nil {
+		return c.providerFailure(g.format, err)
+	}
 	text := fmt.Sprintf("Configuration: %s\nProvider: %s\nRead issues: %t\nWrite issues: %t",
 		result.ConfigPath, result.ProviderType,
 		result.Capabilities.ReadIssues, result.Capabilities.WriteIssues)
@@ -235,8 +238,8 @@ func (c *cli) show(ctx context.Context, g globals, args []string) int {
 	if len(args) != 1 {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("show requires one issue number"), 2)
 	}
-	number, err := strconv.Atoi(args[0])
-	if err != nil || number <= 0 {
+	number := args[0]
+	if !validIssueReference(number) {
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("invalid issue number %q", args[0]), 2)
 	}
 	runtime, code := c.open(g)
@@ -247,9 +250,23 @@ func (c *cli) show(ctx context.Context, g globals, args []string) int {
 	if err != nil {
 		return c.providerFailure(g.format, err)
 	}
-	text := fmt.Sprintf("#%d %s\nState: %s\nURL: %s\n\n%s",
+	text := fmt.Sprintf("#%s %s\nState: %s\nURL: %s\n\n%s",
 		issue.Number, issue.Title, issue.WorkflowState, issue.URL, issue.Body)
 	return c.success(g.format, issue.Public(), text)
+}
+
+func validIssueReference(value string) bool {
+	if len(value) < 1 || len(value) > 64 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (c *cli) open(g globals) (*app.Runtime, int) {
@@ -261,10 +278,18 @@ func (c *cli) open(g globals) (*app.Runtime, int) {
 }
 
 func (c *cli) providerFailure(format string, err error) int {
-	if errors.Is(err, provider.ErrNotFound) {
+	switch {
+	case errors.Is(err, provider.ErrAuthentication):
+		return c.fail(format, "AUTHENTICATION_FAILED", err, 3)
+	case errors.Is(err, provider.ErrPermission):
+		return c.fail(format, "PERMISSION_DENIED", err, 3)
+	case errors.Is(err, provider.ErrNotFound):
 		return c.fail(format, "NOT_FOUND", err, 4)
+	case errors.Is(err, provider.ErrRateLimited):
+		return c.fail(format, "RATE_LIMITED", err, 6)
+	default:
+		return c.fail(format, "PROVIDER_UNAVAILABLE", err, 6)
 	}
-	return c.fail(format, "PROVIDER_UNAVAILABLE", err, 6)
 }
 
 func (c *cli) workflowFailure(format, operationID string, err error) int {

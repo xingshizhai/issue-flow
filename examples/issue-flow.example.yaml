@@ -1,0 +1,31 @@
+version: 1
+
+provider:
+  type: gitee
+  owner: example-owner
+  repo: example-repo
+  token_env: GITEE_TOKEN
+
+workflow:
+  ready_label: agent:ready
+  claimed_label: agent:claimed
+  working_label: agent:working
+  blocked_label: agent:blocked
+  review_label: agent:review
+  done_label: agent:done
+  lease_minutes: 120
+  auto_close: false
+
+project:
+  instruction_files:
+    - AGENTS.md
+    - CLAUDE.md
+
+security:
+  redact_keys:
+    - password
+    - token
+    - cookie
+    - authorization
+    - api_key
+    - secret

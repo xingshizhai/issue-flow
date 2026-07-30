@@ -10,6 +10,7 @@ import (
 	"issue-flow/internal/config"
 	"issue-flow/internal/provider"
 	"issue-flow/internal/provider/fake"
+	"issue-flow/internal/provider/gitee"
 	"issue-flow/internal/workflow"
 )
 
@@ -37,7 +38,16 @@ func Open(configPath, project string) (*Runtime, error) {
 	case "fake":
 		p = fake.New(fake.ResolvePath(path, cfg.Provider.DataFile))
 	case "gitee":
-		return nil, fmt.Errorf("gitee provider is not implemented")
+		token := os.Getenv(cfg.Provider.TokenEnv)
+		if token == "" {
+			return nil, fmt.Errorf("environment variable %s is not set", cfg.Provider.TokenEnv)
+		}
+		p = gitee.New(
+			gitee.NewClient(token, 30*time.Second),
+			cfg.Provider.Owner,
+			cfg.Provider.Repo,
+			cfg.Workflow,
+		)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider.Type)
 	}
@@ -52,7 +62,7 @@ type DoctorResult struct {
 	Capabilities provider.Capabilities `json:"capabilities"`
 }
 
-func (r *Runtime) Doctor(ctx context.Context) DoctorResult {
+func (r *Runtime) Doctor(ctx context.Context) (DoctorResult, error) {
 	result := DoctorResult{
 		ConfigPath:   r.ConfigPath,
 		ProviderType: r.Config.Provider.Type,
@@ -62,5 +72,8 @@ func (r *Runtime) Doctor(ctx context.Context) DoctorResult {
 		result.TokenEnv = r.Config.Provider.TokenEnv
 		_, result.TokenSet = os.LookupEnv(r.Config.Provider.TokenEnv)
 	}
-	return result
+	if err := r.Provider.Check(ctx); err != nil {
+		return result, err
+	}
+	return result, nil
 }

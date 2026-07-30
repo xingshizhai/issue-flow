@@ -56,7 +56,7 @@ type WorkflowEvent struct {
 
 type Issue struct {
 	ID            string          `json:"id"`
-	Number        int             `json:"number"`
+	Number        string          `json:"number"`
 	Title         string          `json:"title"`
 	Body          string          `json:"body"`
 	ProviderState ProviderState   `json:"providerState"`

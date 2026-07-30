@@ -17,9 +17,9 @@ func TestListFiltersAndPaginates(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "issues.json")
 	data := fileData{Version: 1, Issues: []domain.Issue{
-		{Number: 3, Title: "third", WorkflowState: domain.StateReady, CreatedAt: time.Unix(3, 0)},
-		{Number: 1, Title: "first", WorkflowState: domain.StateReady, CreatedAt: time.Unix(1, 0)},
-		{Number: 2, Title: "working", WorkflowState: domain.StateWorking, CreatedAt: time.Unix(2, 0)},
+		{Number: "3", Title: "third", WorkflowState: domain.StateReady, CreatedAt: time.Unix(3, 0)},
+		{Number: "1", Title: "first", WorkflowState: domain.StateReady, CreatedAt: time.Unix(1, 0)},
+		{Number: "2", Title: "working", WorkflowState: domain.StateWorking, CreatedAt: time.Unix(2, 0)},
 	}}
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -35,7 +35,7 @@ func TestListFiltersAndPaginates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.Items) != 1 || first.Items[0].Number != 1 || first.NextCursor != "1" {
+	if len(first.Items) != 1 || first.Items[0].Number != "1" || first.NextCursor != "1" {
 		t.Fatalf("unexpected first page: %+v", first)
 	}
 	second, err := store.ListIssues(context.Background(), provider.ListQuery{
@@ -44,7 +44,7 @@ func TestListFiltersAndPaginates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(second.Items) != 1 || second.Items[0].Number != 3 || second.NextCursor != "" {
+	if len(second.Items) != 1 || second.Items[0].Number != "3" || second.NextCursor != "" {
 		t.Fatalf("unexpected second page: %+v", second)
 	}
 }
@@ -53,7 +53,7 @@ func TestConcurrentUpdateHasOneWinner(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "issues.json")
 	data := fileData{Version: 1, Issues: []domain.Issue{{
-		Number: 1, Title: "race", WorkflowState: domain.StateReady, Version: "1",
+		Number: "1", Title: "race", WorkflowState: domain.StateReady, Version: "1",
 	}}}
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestConcurrentUpdateHasOneWinner(t *testing.T) {
 		go func() {
 			<-start
 			state := domain.StateClaimed
-			_, err := New(path).UpdateIssue(context.Background(), 1, provider.IssueChange{
+			_, err := New(path).UpdateIssue(context.Background(), "1", provider.IssueChange{
 				WorkflowState: &state,
 				Lease: &domain.Lease{
 					ID: "lease_" + string(rune('a'+i)), AgentID: "agent",
@@ -104,7 +104,7 @@ func TestConcurrentUpdateHasOneWinner(t *testing.T) {
 
 func TestGetIssueNotFound(t *testing.T) {
 	t.Parallel()
-	_, err := New(filepath.Join(t.TempDir(), "missing.json")).GetIssue(context.Background(), 42)
+	_, err := New(filepath.Join(t.TempDir(), "missing.json")).GetIssue(context.Background(), "42")
 	if !errors.Is(err, provider.ErrNotFound) {
 		t.Fatalf("GetIssue() error = %v", err)
 	}

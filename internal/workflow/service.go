@@ -38,7 +38,7 @@ func New(p provider.Provider, c clock.Clock, leaseDuration time.Duration) *Servi
 	return &Service{provider: p, clock: c, leaseDuration: leaseDuration, newToken: randomToken}
 }
 
-func (s *Service) Claim(ctx context.Context, number int, agentID, operationID string, dryRun bool) (Result, error) {
+func (s *Service) Claim(ctx context.Context, number, agentID, operationID string, dryRun bool) (Result, error) {
 	if err := validateAgentID(agentID); err != nil {
 		return Result{}, err
 	}
@@ -79,18 +79,18 @@ func (s *Service) Claim(ctx context.Context, number int, agentID, operationID st
 	return result, err
 }
 
-func (s *Service) Start(ctx context.Context, number int, agentID, token, operationID string, dryRun bool) (Result, error) {
+func (s *Service) Start(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
 	return s.holderTransition(ctx, number, agentID, token, operationID, "start", domain.StateWorking, "", dryRun)
 }
 
-func (s *Service) Release(ctx context.Context, number int, agentID, token, operationID, reason string, dryRun bool) (Result, error) {
+func (s *Service) Release(ctx context.Context, number, agentID, token, operationID, reason string, dryRun bool) (Result, error) {
 	if strings.TrimSpace(reason) == "" {
 		return Result{}, fmt.Errorf("%w: release reason is required", ErrInvalidInput)
 	}
 	return s.holderTransition(ctx, number, agentID, token, operationID, "release", domain.StateReady, reason, dryRun)
 }
 
-func (s *Service) Heartbeat(ctx context.Context, number int, agentID, token, operationID string, dryRun bool) (Result, error) {
+func (s *Service) Heartbeat(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
 	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
 	if err != nil {
 		return Result{}, err
@@ -111,7 +111,7 @@ func (s *Service) Heartbeat(ctx context.Context, number int, agentID, token, ope
 	}, dryRun)
 }
 
-func (s *Service) Reclaim(ctx context.Context, number int, operationID string, dryRun bool) (Result, error) {
+func (s *Service) Reclaim(ctx context.Context, number, operationID string, dryRun bool) (Result, error) {
 	current, err := s.provider.GetIssue(ctx, number)
 	if err != nil {
 		return Result{}, err
@@ -143,7 +143,7 @@ func (s *Service) Reclaim(ctx context.Context, number int, operationID string, d
 }
 
 func (s *Service) holderTransition(
-	ctx context.Context, number int, agentID, token, operationID, operation string,
+	ctx context.Context, number, agentID, token, operationID, operation string,
 	next domain.WorkflowState, message string, dryRun bool,
 ) (Result, error) {
 	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
@@ -170,7 +170,7 @@ func (s *Service) holderTransition(
 	}, dryRun)
 }
 
-func (s *Service) authorizedIssue(ctx context.Context, number int, agentID, token string) (domain.Issue, time.Time, error) {
+func (s *Service) authorizedIssue(ctx context.Context, number, agentID, token string) (domain.Issue, time.Time, error) {
 	if err := validateAgentID(agentID); err != nil {
 		return domain.Issue{}, time.Time{}, err
 	}

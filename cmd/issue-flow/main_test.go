@@ -57,7 +57,7 @@ func TestInitDoctorAndListJSON(t *testing.T) {
 func TestLeaseWorkflowAndAuthorization(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{
-		ID: "1", Number: 1, Title: "fix bug", ProviderState: domain.ProviderStateOpen,
+		ID: "1", Number: "1", Title: "fix bug", ProviderState: domain.ProviderStateOpen,
 		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
 	})
 	code, stdout, stderr := invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
@@ -107,7 +107,7 @@ func TestReclaimExpiredLease(t *testing.T) {
 	t.Parallel()
 	expiredToken := "expired-secret"
 	project := seededProject(t, domain.Issue{
-		ID: "1", Number: 1, Title: "expired", ProviderState: domain.ProviderStateOpen,
+		ID: "1", Number: "1", Title: "expired", ProviderState: domain.ProviderStateOpen,
 		WorkflowState: domain.StateWorking, Version: "1", CreatedAt: time.Now().UTC(),
 		Lease: &domain.Lease{
 			ID: "lease_expired", AgentID: "old-agent",
@@ -136,7 +136,7 @@ func TestReclaimExpiredLease(t *testing.T) {
 func TestClaimDryRunDoesNotMutate(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{
-		ID: "1", Number: 1, Title: "dry run", ProviderState: domain.ProviderStateOpen,
+		ID: "1", Number: "1", Title: "dry run", ProviderState: domain.ProviderStateOpen,
 		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
 	})
 	code, stdout, stderr := invoke("claim", "1", "--agent", "codex-a", "--dry-run", "--project", project, "--json")
@@ -160,7 +160,7 @@ func TestClaimDryRunDoesNotMutate(t *testing.T) {
 
 func TestTwoCLIProcessesCannotBothClaim(t *testing.T) {
 	project := seededProject(t, domain.Issue{
-		ID: "1", Number: 1, Title: "process race", ProviderState: domain.ProviderStateOpen,
+		ID: "1", Number: "1", Title: "process race", ProviderState: domain.ProviderStateOpen,
 		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
 	})
 	commands := make([]*exec.Cmd, 2)

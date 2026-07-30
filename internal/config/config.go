@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"issue-flow/internal/domain"
 )
 
 const (
@@ -33,7 +34,11 @@ type Provider struct {
 
 type Workflow struct {
 	ReadyLabel   string `yaml:"ready_label" json:"readyLabel"`
+	ClaimedLabel string `yaml:"claimed_label" json:"claimedLabel"`
+	WorkingLabel string `yaml:"working_label" json:"workingLabel"`
+	BlockedLabel string `yaml:"blocked_label" json:"blockedLabel"`
 	ReviewLabel  string `yaml:"review_label" json:"reviewLabel"`
+	DoneLabel    string `yaml:"done_label" json:"doneLabel"`
 	LeaseMinutes int    `yaml:"lease_minutes" json:"leaseMinutes"`
 	AutoClose    bool   `yaml:"auto_close" json:"autoClose"`
 }
@@ -55,7 +60,11 @@ func Default() Config {
 		},
 		Workflow: Workflow{
 			ReadyLabel:   "agent:ready",
+			ClaimedLabel: "agent:claimed",
+			WorkingLabel: "agent:working",
+			BlockedLabel: "agent:blocked",
 			ReviewLabel:  "agent:review",
+			DoneLabel:    "agent:done",
 			LeaseMinutes: 120,
 		},
 		Project: Project{InstructionFiles: []string{"AGENTS.md", "CLAUDE.md"}},
@@ -63,6 +72,37 @@ func Default() Config {
 			"password", "token", "cookie", "authorization", "api_key", "secret",
 		}},
 	}
+}
+
+func (w Workflow) LabelFor(state domain.WorkflowState) string {
+	switch state {
+	case domain.StateReady:
+		return w.ReadyLabel
+	case domain.StateClaimed:
+		return w.ClaimedLabel
+	case domain.StateWorking:
+		return w.WorkingLabel
+	case domain.StateBlocked:
+		return w.BlockedLabel
+	case domain.StateReview:
+		return w.ReviewLabel
+	case domain.StateDone:
+		return w.DoneLabel
+	default:
+		return ""
+	}
+}
+
+func (w Workflow) StateForLabel(label string) domain.WorkflowState {
+	for _, state := range []domain.WorkflowState{
+		domain.StateReady, domain.StateClaimed, domain.StateWorking,
+		domain.StateBlocked, domain.StateReview, domain.StateDone,
+	} {
+		if label != "" && label == w.LabelFor(state) {
+			return state
+		}
+	}
+	return ""
 }
 
 func (c Config) Validate() error {
@@ -83,6 +123,20 @@ func (c Config) Validate() error {
 	}
 	if c.Workflow.LeaseMinutes <= 0 {
 		return errors.New("workflow.lease_minutes must be positive")
+	}
+	labels := make(map[string]domain.WorkflowState)
+	for _, state := range []domain.WorkflowState{
+		domain.StateReady, domain.StateClaimed, domain.StateWorking,
+		domain.StateBlocked, domain.StateReview, domain.StateDone,
+	} {
+		label := strings.TrimSpace(c.Workflow.LabelFor(state))
+		if label == "" {
+			return fmt.Errorf("workflow label for %s is required", state)
+		}
+		if previous, exists := labels[label]; exists {
+			return fmt.Errorf("workflow label %q is used for both %s and %s", label, previous, state)
+		}
+		labels[label] = state
 	}
 	return nil
 }

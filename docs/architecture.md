@@ -106,7 +106,7 @@ Skill 本身保持精简。详细状态机和安全约束放入 `references/`，
 ```go
 type Issue struct {
     ID          string
-    Number      int
+    Number      string
     Title       string
     Body        string
     State       IssueState

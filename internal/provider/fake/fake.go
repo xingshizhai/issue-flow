@@ -36,6 +36,11 @@ func (s *Store) Capabilities(context.Context) provider.Capabilities {
 	}
 }
 
+func (s *Store) Check(context.Context) error {
+	_, err := s.read()
+	return err
+}
+
 func (s *Store) ListIssues(ctx context.Context, query provider.ListQuery) (provider.IssuePage, error) {
 	if err := ctx.Err(); err != nil {
 		return provider.IssuePage{}, err
@@ -78,7 +83,7 @@ func (s *Store) ListIssues(ctx context.Context, query provider.ListQuery) (provi
 	return page, nil
 }
 
-func (s *Store) GetIssue(ctx context.Context, number int) (domain.Issue, error) {
+func (s *Store) GetIssue(ctx context.Context, number string) (domain.Issue, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.Issue{}, err
 	}
@@ -91,7 +96,7 @@ func (s *Store) GetIssue(ctx context.Context, number int) (domain.Issue, error) 
 			return issue, nil
 		}
 	}
-	return domain.Issue{}, fmt.Errorf("%w: %d", provider.ErrNotFound, number)
+	return domain.Issue{}, fmt.Errorf("%w: %s", provider.ErrNotFound, number)
 }
 
 func (s *Store) read() (fileData, error) {
@@ -119,7 +124,7 @@ func (s *Store) readUnlocked() (fileData, error) {
 	return data, nil
 }
 
-func (s *Store) UpdateIssue(ctx context.Context, number int, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
+func (s *Store) UpdateIssue(ctx context.Context, number string, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
 	var updated domain.Issue
 	err := s.withLock(func() error {
 		if err := ctx.Err(); err != nil {
@@ -137,7 +142,7 @@ func (s *Store) UpdateIssue(ctx context.Context, number int, change provider.Iss
 			}
 		}
 		if index < 0 {
-			return fmt.Errorf("%w: %d", provider.ErrNotFound, number)
+			return fmt.Errorf("%w: %s", provider.ErrNotFound, number)
 		}
 		current := data.Issues[index]
 		for _, event := range current.Events {

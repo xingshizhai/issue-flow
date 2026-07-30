@@ -26,6 +26,8 @@ issue-flow doctor
 
 Credentials must come from environment variables or approved external storage, never the repository. The architecture supports REST API with an environment token, REST API with OAuth and token refresh, and a configured Gitee MCP server. Run `doctor` to verify capabilities; do not run real writes without explicit authorization.
 
+The current implementation supports the Gitee REST API with an environment token. Copy `examples/issue-flow.example.yaml` to `.issue-flow.yaml`, set the owner and repository path, export the configured token variable, and run `issue-flow doctor`. OAuth and MCP transports remain planned capabilities.
+
 ## Agent workflow
 
 ```text
@@ -48,3 +50,5 @@ issue-flow start 123 --agent "<stable-agent-id>" --lease-token "<token-from-clai
 The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
 All environments share the same CLI and JSON contract; platform Skills/Rules remain thin. See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
+
+Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.

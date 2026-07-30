@@ -34,6 +34,6 @@ func JSON(w io.Writer, envelope Envelope) error {
 	return encoder.Encode(envelope)
 }
 
-func TextIssue(w io.Writer, number int, title, state string) {
-	fmt.Fprintf(w, "#%d [%s] %s\n", number, state, title)
+func TextIssue(w io.Writer, number, title, state string) {
+	fmt.Fprintf(w, "#%s [%s] %s\n", number, state, title)
 }

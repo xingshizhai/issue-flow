@@ -10,6 +10,10 @@ import (
 var (
 	ErrNotFound           = errors.New("issue not found")
 	ErrPreconditionFailed = errors.New("provider precondition failed")
+	ErrAuthentication     = errors.New("provider authentication failed")
+	ErrPermission         = errors.New("provider permission denied")
+	ErrRateLimited        = errors.New("provider rate limited")
+	ErrUnavailable        = errors.New("provider unavailable")
 )
 
 type ListQuery struct {
@@ -32,7 +36,7 @@ type Capabilities struct {
 
 type IssueReader interface {
 	ListIssues(context.Context, ListQuery) (IssuePage, error)
-	GetIssue(context.Context, int) (domain.Issue, error)
+	GetIssue(context.Context, string) (domain.Issue, error)
 }
 
 type Precondition struct {
@@ -49,11 +53,12 @@ type IssueChange struct {
 }
 
 type IssueWriter interface {
-	UpdateIssue(context.Context, int, IssueChange, Precondition) (domain.Issue, error)
+	UpdateIssue(context.Context, string, IssueChange, Precondition) (domain.Issue, error)
 }
 
 type Provider interface {
 	IssueReader
 	IssueWriter
 	Capabilities(context.Context) Capabilities
+	Check(context.Context) error
 }
