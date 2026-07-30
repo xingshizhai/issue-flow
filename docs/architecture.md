@@ -328,6 +328,10 @@ Gitee 是否支持适合 Issue 更新的强条件写入，需要实现阶段基�
 
 这仍不是分布式事务，但结果可收敛且不会让两个 Agent 都误以为长期持有租约。若未来需要强一致，可增加外部协调后端。
 
+Workflow 在 claim 写入后的重读结果上再次验证 lease ID、agent ID 和明文 token。
+只有三者都属于本次 claim 时才返回明文 token；竞争收敛后的失败者返回
+`LEASE_CONFLICT`，结果中不得包含其临时 token。
+
 ## 11. 幂等和重试
 
 - 每个写命令生成 operation ID。

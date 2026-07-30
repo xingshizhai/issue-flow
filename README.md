@@ -61,6 +61,8 @@ JSON errors preserve the write operation ID and include a stable code plus `retr
 
 The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
+After every claim write, the workflow rereads ownership and returns the plaintext token only if the resulting lease ID, agent ID, and token all match. A losing concurrent claimant receives `LEASE_CONFLICT` without a token.
+
 ```bash
 issue-flow progress 123 --agent "<stable-agent-id>" --lease-token "<token>" --message "tests passing"
 issue-flow block 123 --agent "<stable-agent-id>" --lease-token "<token>" --reason "waiting for access"

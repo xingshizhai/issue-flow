@@ -84,8 +84,16 @@ func (s *Service) Claim(ctx context.Context, number, agentID, operationID string
 	result, err := s.apply(ctx, current, change, provider.Precondition{
 		Version: current.Version, WorkflowState: domain.StateReady,
 	}, dryRun)
+	if err != nil {
+		return result, err
+	}
+	if result.Issue.Lease == nil ||
+		result.Issue.Lease.ID != lease.ID ||
+		!result.Issue.Lease.Authenticates(agentID, token) {
+		return Result{}, fmt.Errorf("%w: another claim won ownership", ErrLeaseConflict)
+	}
 	result.LeaseToken = token
-	return result, err
+	return result, nil
 }
 
 func (s *Service) Start(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
