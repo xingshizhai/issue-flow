@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,5 +95,48 @@ func TestValidateRejectsFakeDataOutsideConfigDirectory(t *testing.T) {
 			!strings.Contains(err.Error(), "inside the configuration directory") {
 			t.Errorf("data_file %q error = %v", path, err)
 		}
+	}
+}
+
+func TestLoadRejectsSymlinkAndOversizedConfig(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	target := filepath.Join(root, "target.yaml")
+	if err := WriteDefault(target); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "linked.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := Load(link); err == nil || !strings.Contains(err.Error(), "not a symlink") {
+		t.Fatalf("symlink error = %v", err)
+	}
+
+	oversized := filepath.Join(root, "oversized.yaml")
+	if err := os.WriteFile(oversized, bytes.Repeat([]byte("x"), (1<<20)+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(oversized); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized error = %v", err)
+	}
+}
+
+func TestWriteDefaultRefusesDanglingSymlink(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	target := filepath.Join(root, "outside.yaml")
+	link := filepath.Join(root, DefaultName)
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := WriteDefault(link); err == nil ||
+		!strings.Contains(err.Error(), "refusing to overwrite") {
+		t.Fatalf("WriteDefault() error = %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("dangling symlink target was created: %v", err)
 	}
 }

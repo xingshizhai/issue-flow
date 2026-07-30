@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,9 +214,35 @@ func (c Config) Validate() error {
 }
 
 func Load(path string) (Config, error) {
-	raw, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return Config{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return Config{}, errors.New("configuration must be a regular file, not a symlink")
+	}
+	const maximumConfigSize = 1 << 20
+	if info.Size() > maximumConfigSize {
+		return Config{}, fmt.Errorf("configuration exceeds %d bytes", maximumConfigSize)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return Config{}, err
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return Config{}, err
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return Config{}, errors.New("configuration changed while opening")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximumConfigSize+1))
+	if err != nil {
+		return Config{}, err
+	}
+	if len(raw) > maximumConfigSize {
+		return Config{}, fmt.Errorf("configuration exceeds %d bytes", maximumConfigSize)
 	}
 	cfg := Default()
 	decoder := yaml.NewDecoder(strings.NewReader(string(raw)))
@@ -262,14 +289,26 @@ func Find(explicit, project string) (string, error) {
 }
 
 func WriteDefault(path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("refusing to overwrite existing %s", path)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	raw, err := yaml.Marshal(Default())
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0o600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("refusing to overwrite existing %s", path)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(raw); err != nil {
+		file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	return file.Close()
 }
