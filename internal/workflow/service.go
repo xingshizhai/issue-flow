@@ -160,6 +160,37 @@ func (s *Service) Finish(ctx context.Context, number, agentID, token, operationI
 	return s.holderTransition(ctx, number, agentID, token, operationID, "finish", domain.StateReview, summary, true, dryRun)
 }
 
+func (s *Service) Complete(ctx context.Context, number, reviewerID, operationID, conclusion string, dryRun bool) (Result, error) {
+	if err := validateAgentID(reviewerID); err != nil {
+		return Result{}, err
+	}
+	if strings.TrimSpace(conclusion) == "" {
+		return Result{}, fmt.Errorf("%w: review conclusion is required", ErrInvalidInput)
+	}
+	current, err := s.provider.GetIssue(ctx, number)
+	if err != nil {
+		return Result{}, err
+	}
+	if result, found, err := replayOperation(current, operationID, "complete", reviewerID); found || err != nil {
+		return result, err
+	}
+	if err := domain.ValidateTransition(current.WorkflowState, domain.StateDone); err != nil {
+		return Result{}, fmt.Errorf("%w: %v", ErrStateConflict, err)
+	}
+	next := domain.StateDone
+	change := provider.IssueChange{
+		WorkflowState: &next,
+		Event: domain.WorkflowEvent{
+			Version: 1, OperationID: operationID, Operation: "complete",
+			AgentID: reviewerID, Message: s.redactor.String(conclusion),
+			From: current.WorkflowState, To: next, OccurredAt: s.clock.Now(),
+		},
+	}
+	return s.apply(ctx, current, change, provider.Precondition{
+		Version: current.Version, WorkflowState: domain.StateReview,
+	}, dryRun)
+}
+
 func (s *Service) Heartbeat(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
 	current, err := s.provider.GetIssue(ctx, number)
 	if err != nil {

@@ -323,6 +323,11 @@ func (p *Provider) applyEvents(ctx context.Context, issue *domain.Issue, notes [
 			if lease == nil || record.Event.LeaseID != lease.ID {
 				continue
 			}
+		case "complete":
+			if derivedState != domain.StateReview || lease != nil ||
+				record.Event.LeaseID != "" || record.Event.To != domain.StateDone {
+				continue
+			}
 		case "reclaim":
 			if lease == nil || !record.ClearLease {
 				continue

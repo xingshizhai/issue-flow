@@ -189,6 +189,7 @@ issue-flow context 123
 issue-flow progress 123 --message "..."
 issue-flow block 123 --reason "..."
 issue-flow finish 123 --summary-file result.md
+issue-flow complete 123 --reviewer reviewer-id --conclusion-file review.md
 ```
 
 `finish` 支持记录：
@@ -202,6 +203,8 @@ issue-flow finish 123 --summary-file result.md
 - 风险和后续工作。
 
 默认目标状态为 `review`。只有配置明确允许且调用方显式传参时，才能关闭 Issue。
+人工审核通过后，`complete` 记录审核人和结论并将状态推进到 `done`；
+该状态转换本身不关闭 Provider Issue。
 
 ### FR-08 Dry-run
 

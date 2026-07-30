@@ -95,6 +95,14 @@ issue-flow finish 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --s
 
 交付摘要必须是稳定的普通文件，不能是符号链接，且最大为 64 KiB。CLI 只打开一次，并确认打开的文件描述符与检查过的路径指向同一文件，再通过该描述符读取，以拒绝路径替换竞态。`finish` 成功后清除租约并将 Issue 转为 `review`。
 
+人工审核后，必须显式记录审核人和审核结论：
+
+```bash
+issue-flow complete 123 --reviewer "<稳定的审核人ID>" --conclusion-file review.md
+```
+
+`complete` 只把 `review` 推进到 `done`，不会关闭 Provider 上的 Issue。
+
 ## Fake Provider 完整演练
 
 使用隔离的项目目录和从当前可信检出版本构建的二进制。该流程不需要网络或 Provider Token：

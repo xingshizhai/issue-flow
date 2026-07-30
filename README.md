@@ -95,6 +95,14 @@ issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summ
 
 The finish summary must be a stable regular file, not a symlink, and is limited to 64 KiB. The CLI opens it once, verifies that the opened descriptor matches the inspected path, and reads through that descriptor to reject path replacement races. A successful finish clears the lease and moves the Issue to `review`.
 
+After a human review, record the reviewer and conclusion explicitly:
+
+```bash
+issue-flow complete 123 --reviewer "<stable-reviewer-id>" --conclusion-file review.md
+```
+
+`complete` moves `review` to `done`; it does not close the provider Issue.
+
 ## Fake Provider walkthrough
 
 Use an isolated project directory and a binary built from this trusted checkout. No network access or Provider token is needed:

@@ -241,6 +241,7 @@ issue-flow block <issue>
 issue-flow release <issue>
 issue-flow reclaim <issue>
 issue-flow finish <issue>
+issue-flow complete <issue>
 ```
 
 `doctor` 用于只读检查配置、Token 是否存在、仓库访问、所需标签和 Provider 能力。默认不得自动创建标签；可另设显式 `doctor --fix`。

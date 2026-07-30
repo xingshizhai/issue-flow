@@ -481,6 +481,29 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 		!strings.Contains(got.Message, "All checks passed") {
 		t.Fatalf("finish event = %+v", got)
 	}
+	conclusionPath := filepath.Join(project, "review.md")
+	if err := os.WriteFile(conclusionPath, []byte("Reviewed and accepted."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = invoke(
+		"complete", "1", "--reviewer", "reviewer-a",
+		"--conclusion-file", conclusionPath, "--operation-id", "op_review_complete",
+		"--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("complete code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	issue = envelope.Data.Issue
+	if issue.WorkflowState != domain.StateDone || issue.Lease != nil {
+		t.Fatalf("complete result = %+v", issue)
+	}
+	if got := issue.Events[len(issue.Events)-1]; got.Operation != "complete" ||
+		got.AgentID != "reviewer-a" || !strings.Contains(got.Message, "accepted") {
+		t.Fatalf("complete event = %+v", got)
+	}
 }
 
 func TestIssueOutputAndProgressWritesAreRedacted(t *testing.T) {

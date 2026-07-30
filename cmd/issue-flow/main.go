@@ -65,6 +65,8 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.doctor(ctx, g, args[1:])
 	case "create":
 		return c.create(ctx, g, args[1:])
+	case "complete":
+		return c.complete(ctx, g, args[1:])
 	case "list":
 		return c.list(ctx, g, args[1:])
 	case "show":
@@ -76,6 +78,45 @@ func (c *cli) run(ctx context.Context, args []string) int {
 	default:
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("unknown command %q", args[0]), 2)
 	}
+}
+
+func (c *cli) complete(ctx context.Context, g globals, args []string) int {
+	if len(args) == 0 || !validIssueReference(args[0]) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("complete requires one valid issue number"), 2)
+	}
+	flags := flag.NewFlagSet("complete", flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	reviewer := flags.String("reviewer", "", "stable human reviewer identifier")
+	conclusionFile := flags.String("conclusion-file", "", "path to the review conclusion")
+	requestedOperationID := flags.String("operation-id", "", "stable operation ID for retry correlation")
+	if err := flags.Parse(args[1:]); err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	if flags.NArg() != 0 || *reviewer == "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("complete requires --reviewer and no extra arguments"), 2)
+	}
+	if *requestedOperationID != "" && !validOperationID(*requestedOperationID) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--operation-id must start with op_ and contain 1 to 64 safe characters"), 2)
+	}
+	conclusion, err := readSummaryFile(*conclusionFile)
+	if err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	opID := operationID()
+	if *requestedOperationID != "" {
+		opID = *requestedOperationID
+	}
+	result, err := runtime.Workflow().Complete(ctx, args[0], *reviewer, opID, conclusion, g.dryRun)
+	if err != nil {
+		return c.workflowFailure(g.format, opID, err)
+	}
+	result.Issue = redact.New(runtime.Config.Security.RedactKeys).Issue(result.Issue.Public())
+	return c.successWithID(g.format, opID, result,
+		fmt.Sprintf("#%s is now %s", result.Issue.Number, result.Issue.WorkflowState))
 }
 
 func (c *cli) create(ctx context.Context, g globals, args []string) int {
@@ -541,6 +582,7 @@ Commands:
   init       Create a safe default configuration
   doctor     Validate configuration and inspect provider capabilities
   create     Create a ready bug, feature, or improvement issue
+  complete   Record human review and move a review Issue to done
   list       List issues
   show       Show one issue
   context    Build normalized agent context
