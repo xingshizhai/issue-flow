@@ -49,6 +49,14 @@ issue-flow start 123 --agent "<stable-agent-id>" --lease-token "<token-from-clai
 
 The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
+```bash
+issue-flow progress 123 --agent "<stable-agent-id>" --lease-token "<token>" --message "tests passing"
+issue-flow block 123 --agent "<stable-agent-id>" --lease-token "<token>" --reason "waiting for access"
+issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summary-file result.md
+```
+
+The finish summary must be a regular file, not a symlink, and is limited to 64 KiB. A successful finish clears the lease and moves the Issue to `review`.
+
 All environments share the same CLI and JSON contract; platform Skills/Rules remain thin. See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.

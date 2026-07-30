@@ -158,6 +158,102 @@ func TestClaimDryRunDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestProgressBlockAndFinishWorkflow(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "deliver", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("claim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	token := leaseTokenFromEnvelope(t, stdout)
+	for _, command := range [][]string{
+		{"start", "1", "--agent", "codex-a", "--lease-token", token},
+		{"progress", "1", "--agent", "codex-a", "--lease-token", token, "--message", "tests are passing"},
+		{"block", "1", "--agent", "codex-a", "--lease-token", token, "--reason", "waiting for review input"},
+	} {
+		args := append(command, "--project", project, "--json")
+		code, stdout, stderr = invoke(args...)
+		if code != 0 || stderr != "" {
+			t.Fatalf("%s code=%d stdout=%q stderr=%q", command[0], code, stdout, stderr)
+		}
+	}
+	summaryPath := filepath.Join(project, "result.md")
+	if err := os.WriteFile(summaryPath, []byte("# Result\n\nAll checks passed."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = invoke(
+		"finish", "1", "--agent", "codex-a", "--lease-token", token,
+		"--summary-file", summaryPath, "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("finish code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	issue := envelope.Data.Issue
+	if issue.WorkflowState != domain.StateReview || issue.Lease != nil {
+		t.Fatalf("finish result = %+v", issue)
+	}
+	if got := issue.Events[len(issue.Events)-1]; got.Operation != "finish" ||
+		!strings.Contains(got.Message, "All checks passed") {
+		t.Fatalf("finish event = %+v", got)
+	}
+}
+
+func TestFinishRejectsSymlinkSummary(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "deliver", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	target := filepath.Join(project, "target.md")
+	link := filepath.Join(project, "result.md")
+	if err := os.WriteFile(target, []byte("summary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke(
+		"finish", "1", "--agent", "codex-a", "--lease-token", "unused",
+		"--summary-file", link, "--project", project, "--json",
+	)
+	if code != 2 || stderr != "" {
+		t.Fatalf("finish code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
+func TestProgressRequiresMessage(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "progress", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, _ := invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
+	if code != 0 {
+		t.Fatal(stdout)
+	}
+	token := leaseTokenFromEnvelope(t, stdout)
+	code, stdout, stderr := invoke(
+		"progress", "1", "--agent", "codex-a", "--lease-token", token,
+		"--project", project, "--json",
+	)
+	if code != 2 || stderr != "" {
+		t.Fatalf("progress code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
 func TestTwoCLIProcessesCannotBothClaim(t *testing.T) {
 	project := seededProject(t, domain.Issue{
 		ID: "1", Number: "1", Title: "process race", ProviderState: domain.ProviderStateOpen,

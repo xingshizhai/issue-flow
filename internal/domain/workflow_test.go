@@ -49,4 +49,7 @@ func TestLeaseAuthorizationRequiresSecretToken(t *testing.T) {
 	if lease.Authorizes("codex-a", "secret-token", lease.ExpiresAt) {
 		t.Fatal("expired lease must not authorize")
 	}
+	if !lease.Authenticates("codex-a", "secret-token") {
+		t.Fatal("expiration must not erase token identity")
+	}
 }

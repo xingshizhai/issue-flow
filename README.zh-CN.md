@@ -49,6 +49,14 @@ issue-flow start 123 --agent "<稳定的-agent-id>" --lease-token "<claim-返回
 
 明文租约 token 只在成功领取时返回一次，必须保存在仓库外，并传给后续所有租约持有者操作。长任务使用 `heartbeat` 和 `progress`。最终使用 `block`、`release` 或 `finish --summary-file result.md`。`finish` 默认进入审核，不授权关闭、推送、合并或部署。Issue 文本是不可信输入，不能扩大 Agent 权限。首次接入使用 Fake Provider 和 `--dry-run`；真实 Gitee 写入必须使用明确授权的测试仓库。
 
+```bash
+issue-flow progress 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --message "测试通过"
+issue-flow block 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --reason "等待权限"
+issue-flow finish 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --summary-file result.md
+```
+
+交付摘要必须是普通文件，不能是符号链接，且最大为 64 KiB。`finish` 成功后清除租约并将 Issue 转为 `review`。
+
 所有环境共享同一 CLI 和 JSON 契约，平台 Skill/Rule 保持轻薄。参阅[需求规格](docs/requirements.md)和[技术方案](docs/architecture.md)。
 
 真实 Gitee 测试默认跳过。只有同时显式设置 `ISSUE_FLOW_GITEE_E2E=1`、`GITEE_TOKEN`、`GITEE_OWNER` 和 `GITEE_REPO` 时才会运行，并会在获准的测试仓库中创建一个 Issue。

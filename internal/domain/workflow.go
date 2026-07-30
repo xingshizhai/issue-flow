@@ -49,12 +49,16 @@ func (l Lease) ValidAt(now time.Time) bool {
 }
 
 func (l Lease) Authorizes(agentID, leaseToken string, now time.Time) bool {
+	return l.Authenticates(agentID, leaseToken) && l.ValidAt(now)
+}
+
+func (l Lease) Authenticates(agentID, leaseToken string) bool {
 	actual, err := hex.DecodeString(l.TokenHash)
 	if err != nil {
 		return false
 	}
 	expected := sha256.Sum256([]byte(leaseToken))
-	return l.ValidAt(now) && l.AgentID == agentID &&
+	return l.AgentID == agentID &&
 		subtle.ConstantTimeCompare(actual, expected[:]) == 1
 }
 

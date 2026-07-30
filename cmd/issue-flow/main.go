@@ -63,7 +63,7 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.list(ctx, g, args[1:])
 	case "show":
 		return c.show(ctx, g, args[1:])
-	case "claim", "start", "heartbeat", "release", "reclaim":
+	case "claim", "start", "heartbeat", "progress", "block", "release", "reclaim", "finish":
 		return c.leaseCommand(ctx, g, args[0], args[1:])
 	default:
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("unknown command %q", args[0]), 2)
@@ -82,7 +82,9 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	flags.SetOutput(c.stderr)
 	agentID := flags.String("agent", "", "stable agent identifier")
 	leaseToken := flags.String("lease-token", "", "secret lease token returned by claim")
-	reason := flags.String("reason", "", "release reason")
+	reason := flags.String("reason", "", "release or block reason")
+	message := flags.String("message", "", "progress message")
+	summaryFile := flags.String("summary-file", "", "path to a finish summary")
 	if err := flags.Parse(args[1:]); err != nil {
 		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
 	}
@@ -110,10 +112,20 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 		result, err = service.Start(ctx, number, *agentID, *leaseToken, opID, g.dryRun)
 	case "heartbeat":
 		result, err = service.Heartbeat(ctx, number, *agentID, *leaseToken, opID, g.dryRun)
+	case "progress":
+		result, err = service.Progress(ctx, number, *agentID, *leaseToken, opID, *message, g.dryRun)
+	case "block":
+		result, err = service.Block(ctx, number, *agentID, *leaseToken, opID, *reason, g.dryRun)
 	case "release":
 		result, err = service.Release(ctx, number, *agentID, *leaseToken, opID, *reason, g.dryRun)
 	case "reclaim":
 		result, err = service.Reclaim(ctx, number, opID, g.dryRun)
+	case "finish":
+		var summary string
+		summary, err = readSummaryFile(*summaryFile)
+		if err == nil {
+			result, err = service.Finish(ctx, number, *agentID, *leaseToken, opID, summary, g.dryRun)
+		}
 	}
 	if err != nil {
 		return c.workflowFailure(g.format, opID, err)
@@ -129,6 +141,31 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 		text += "\nLease token: " + result.LeaseToken
 	}
 	return c.successWithID(g.format, opID, result, text)
+}
+
+func readSummaryFile(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("%w: --summary-file is required", workflow.ErrInvalidInput)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: read summary file: %v", workflow.ErrInvalidInput, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%w: summary file must be a regular file, not a symlink", workflow.ErrInvalidInput)
+	}
+	const maximumSummarySize = 64 << 10
+	if info.Size() > maximumSummarySize {
+		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: read summary file: %v", workflow.ErrInvalidInput, err)
+	}
+	if len(raw) > maximumSummarySize {
+		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
+	}
+	return string(raw), nil
 }
 
 func (c *cli) init(g globals, args []string) int {
@@ -352,8 +389,11 @@ Commands:
   claim      Claim a ready issue
   start      Move a claimed issue to working
   heartbeat  Renew a held lease
+  progress   Record progress without changing state
+  block      Move a working issue to blocked
   release    Release a held lease back to ready
   reclaim    Recover an expired lease
+  finish     Deliver a summary and move to review
   version    Print version
 
 Global flags (accepted before or after the command):

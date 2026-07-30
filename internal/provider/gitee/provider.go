@@ -255,7 +255,7 @@ func (p *Provider) applyEvents(ctx context.Context, issue *domain.Issue, notes [
 			}
 			copied := *record.Lease
 			lease = &copied
-		case "start", "heartbeat", "release":
+		case "start", "heartbeat", "progress", "block", "release", "finish":
 			if lease == nil || record.Event.LeaseID != lease.ID {
 				continue
 			}

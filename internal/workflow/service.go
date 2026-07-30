@@ -80,14 +80,54 @@ func (s *Service) Claim(ctx context.Context, number, agentID, operationID string
 }
 
 func (s *Service) Start(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
-	return s.holderTransition(ctx, number, agentID, token, operationID, "start", domain.StateWorking, "", dryRun)
+	return s.holderTransition(ctx, number, agentID, token, operationID, "start", domain.StateWorking, "", false, dryRun)
 }
 
 func (s *Service) Release(ctx context.Context, number, agentID, token, operationID, reason string, dryRun bool) (Result, error) {
 	if strings.TrimSpace(reason) == "" {
 		return Result{}, fmt.Errorf("%w: release reason is required", ErrInvalidInput)
 	}
-	return s.holderTransition(ctx, number, agentID, token, operationID, "release", domain.StateReady, reason, dryRun)
+	return s.holderTransition(ctx, number, agentID, token, operationID, "release", domain.StateReady, reason, true, dryRun)
+}
+
+func (s *Service) Progress(ctx context.Context, number, agentID, token, operationID, message string, dryRun bool) (Result, error) {
+	if strings.TrimSpace(message) == "" {
+		return Result{}, fmt.Errorf("%w: progress message is required", ErrInvalidInput)
+	}
+	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
+	if err != nil {
+		return Result{}, err
+	}
+	switch current.WorkflowState {
+	case domain.StateClaimed, domain.StateWorking, domain.StateBlocked:
+	default:
+		return Result{}, fmt.Errorf("%w: progress is not allowed from %s", ErrStateConflict, current.WorkflowState)
+	}
+	change := provider.IssueChange{
+		Event: domain.WorkflowEvent{
+			Version: 1, OperationID: operationID, Operation: "progress",
+			AgentID: agentID, LeaseID: current.Lease.ID, Message: message,
+			From: current.WorkflowState, To: current.WorkflowState, OccurredAt: now,
+			ExpiresAt: current.Lease.ExpiresAt,
+		},
+	}
+	return s.apply(ctx, current, change, provider.Precondition{
+		Version: current.Version, WorkflowState: current.WorkflowState, LeaseID: current.Lease.ID,
+	}, dryRun)
+}
+
+func (s *Service) Block(ctx context.Context, number, agentID, token, operationID, reason string, dryRun bool) (Result, error) {
+	if strings.TrimSpace(reason) == "" {
+		return Result{}, fmt.Errorf("%w: block reason is required", ErrInvalidInput)
+	}
+	return s.holderTransition(ctx, number, agentID, token, operationID, "block", domain.StateBlocked, reason, false, dryRun)
+}
+
+func (s *Service) Finish(ctx context.Context, number, agentID, token, operationID, summary string, dryRun bool) (Result, error) {
+	if strings.TrimSpace(summary) == "" {
+		return Result{}, fmt.Errorf("%w: finish summary is required", ErrInvalidInput)
+	}
+	return s.holderTransition(ctx, number, agentID, token, operationID, "finish", domain.StateReview, summary, true, dryRun)
 }
 
 func (s *Service) Heartbeat(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
@@ -144,7 +184,7 @@ func (s *Service) Reclaim(ctx context.Context, number, operationID string, dryRu
 
 func (s *Service) holderTransition(
 	ctx context.Context, number, agentID, token, operationID, operation string,
-	next domain.WorkflowState, message string, dryRun bool,
+	next domain.WorkflowState, message string, clearLease, dryRun bool,
 ) (Result, error) {
 	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
 	if err != nil {
@@ -162,7 +202,7 @@ func (s *Service) holderTransition(
 			ExpiresAt: current.Lease.ExpiresAt,
 		},
 	}
-	if next == domain.StateReady {
+	if clearLease {
 		change.ClearLease = true
 	}
 	return s.apply(ctx, current, change, provider.Precondition{
@@ -182,7 +222,7 @@ func (s *Service) authorizedIssue(ctx context.Context, number, agentID, token st
 		return domain.Issue{}, time.Time{}, err
 	}
 	now := s.clock.Now()
-	if current.Lease == nil || !current.Lease.Authorizes(agentID, token, now) {
+	if current.Lease == nil || !current.Lease.Authenticates(agentID, token) {
 		return domain.Issue{}, time.Time{}, fmt.Errorf("%w: caller does not hold this lease", ErrLeaseConflict)
 	}
 	if !current.Lease.ValidAt(now) {
