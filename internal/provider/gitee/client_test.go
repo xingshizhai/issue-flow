@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"issue-flow/internal/provider"
 )
@@ -61,4 +62,93 @@ func TestClientLimitsResponseBody(t *testing.T) {
 	if !target.OK {
 		t.Fatal("response was not decoded")
 	}
+}
+
+func TestClientRetriesTransientGET(t *testing.T) {
+	t.Parallel()
+
+	attempts := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.Header().Set("Retry-After", "2")
+			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	client := NewClientWithBaseURL("https://gitee.test", "", memoryHTTPClient(handler))
+	var delays []time.Duration
+	client.sleep = func(_ context.Context, delay time.Duration) error {
+		delays = append(delays, delay)
+		return nil
+	}
+	var target struct {
+		OK bool `json:"ok"`
+	}
+	if _, err := client.Get(context.Background(), "/test", nil, &target); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 3 || !target.OK {
+		t.Fatalf("attempts = %d, target = %+v", attempts, target)
+	}
+	if len(delays) != 2 || delays[0] != 2*time.Second || delays[1] != 2*time.Second {
+		t.Fatalf("retry delays = %v", delays)
+	}
+}
+
+func TestClientDoesNotRetryWrites(t *testing.T) {
+	t.Parallel()
+
+	attempts := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+	})
+	client := NewClientWithBaseURL("https://gitee.test", "", memoryHTTPClient(handler))
+	client.sleep = func(context.Context, time.Duration) error {
+		t.Fatal("write request attempted to retry")
+		return nil
+	}
+	_, err := client.Do(context.Background(), http.MethodPost, "/test", nil, map[string]string{"body": "event"}, nil)
+	if !errors.Is(err, provider.ErrUnavailable) {
+		t.Fatalf("error = %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("write attempts = %d, want 1", attempts)
+	}
+}
+
+func TestRetryDelayIsCapped(t *testing.T) {
+	t.Parallel()
+
+	response := &http.Response{Header: http.Header{"Retry-After": {"3600"}}}
+	if delay := retryDelay(1, response); delay != 30*time.Second {
+		t.Fatalf("retry delay = %s", delay)
+	}
+}
+
+func TestClientRedactsTransportErrorURL(t *testing.T) {
+	t.Parallel()
+
+	const token = "transport-secret-token"
+	client := NewClientWithBaseURL(
+		"https://gitee.test",
+		token,
+		&http.Client{Transport: failingRoundTripper{}},
+	)
+	client.maxAttempts = 1
+	_, err := client.Get(context.Background(), "/test", nil, &struct{}{})
+	if !errors.Is(err, provider.ErrUnavailable) {
+		t.Fatalf("error = %v", err)
+	}
+	if strings.Contains(err.Error(), token) || strings.Contains(err.Error(), "access_token") {
+		t.Fatalf("transport error leaked request URL: %v", err)
+	}
+}
+
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return nil, errors.New(request.URL.String())
 }

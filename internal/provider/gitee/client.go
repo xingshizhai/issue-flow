@@ -19,9 +19,11 @@ import (
 const defaultBaseURL = "https://gitee.com/api/v5"
 
 type Client struct {
-	baseURL    string
-	credential Credential
-	http       *http.Client
+	baseURL     string
+	credential  Credential
+	http        *http.Client
+	maxAttempts int
+	sleep       func(context.Context, time.Duration) error
 }
 
 func NewClient(token string, timeout time.Duration) *Client {
@@ -37,9 +39,11 @@ func NewClientWithBaseURL(baseURL, token string, httpClient *http.Client) *Clien
 
 func NewClientWithCredential(baseURL string, credential Credential, httpClient *http.Client) *Client {
 	return &Client{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		credential: credential,
-		http:       httpClient,
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		credential:  credential,
+		http:        httpClient,
+		maxAttempts: 3,
+		sleep:       sleepContext,
 	}
 }
 
@@ -77,28 +81,52 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if encoded := query.Encode(); encoded != "" {
 		endpoint += "?" + encoded
 	}
-	var reader io.Reader
+	var rawBody []byte
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		reader = bytes.NewReader(raw)
+		rawBody = raw
+	}
+	attempts := c.maxAttempts
+	if attempts < 1 || method != http.MethodGet {
+		attempts = 1
+	}
+	for attempt := 1; attempt <= attempts; attempt++ {
+		response, err := c.doOnce(ctx, method, endpoint, rawBody, body != nil, target)
+		if err == nil || !retryableRead(method, response, err) || attempt == attempts {
+			return response, err
+		}
+		if err := c.sleep(ctx, retryDelay(attempt, response)); err != nil {
+			return response, err
+		}
+	}
+	panic("unreachable")
+}
+
+func (c *Client) doOnce(ctx context.Context, method, endpoint string, rawBody []byte, hasBody bool, target any) (*http.Response, error) {
+	var reader io.Reader
+	if hasBody {
+		reader = bytes.NewReader(rawBody)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return nil, err
 	}
 	request.Header.Set("Accept", "application/json")
-	if body != nil {
+	if hasBody {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	response, err := c.http.Do(request)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil, err
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
 		}
-		return nil, fmt.Errorf("%w: %v", provider.ErrUnavailable, err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
+		return nil, fmt.Errorf("%w: request failed", provider.ErrUnavailable)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -125,6 +153,45 @@ func cloneValues(values url.Values) url.Values {
 		result[key] = append([]string(nil), entries...)
 	}
 	return result
+}
+
+func retryableRead(method string, response *http.Response, err error) bool {
+	if method != http.MethodGet ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, provider.ErrAuthentication) ||
+		errors.Is(err, provider.ErrPermission) ||
+		errors.Is(err, provider.ErrNotFound) {
+		return false
+	}
+	if response == nil {
+		return errors.Is(err, provider.ErrUnavailable)
+	}
+	return response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
+}
+
+func retryDelay(attempt int, response *http.Response) time.Duration {
+	if response != nil {
+		if seconds, err := strconv.Atoi(response.Header.Get("Retry-After")); err == nil && seconds >= 0 {
+			const maximumRetryAfter = 30
+			if seconds > maximumRetryAfter {
+				seconds = maximumRetryAfter
+			}
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return time.Duration(100*(1<<(attempt-1))) * time.Millisecond
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func mapHTTPError(response *http.Response) error {
