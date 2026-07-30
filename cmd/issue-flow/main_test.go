@@ -54,6 +54,18 @@ func TestInitDoctorAndListJSON(t *testing.T) {
 	assertEnvelope(t, stdout, true, "")
 }
 
+func TestVersion(t *testing.T) {
+	t.Parallel()
+
+	code, stdout, stderr := invoke("version")
+	if code != 0 || stderr != "" {
+		t.Fatalf("version code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if strings.TrimSpace(stdout) != "0.1.0-dev" {
+		t.Fatalf("version output = %q", stdout)
+	}
+}
+
 func TestVerboseReportsSafeMetadataOnStderr(t *testing.T) {
 	t.Parallel()
 

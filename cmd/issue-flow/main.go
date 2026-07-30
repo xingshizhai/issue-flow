@@ -21,7 +21,7 @@ import (
 	"issue-flow/internal/workflow"
 )
 
-const version = "0.1.0-dev"
+var version = "0.1.0-dev"
 
 type cli struct {
 	stdout io.Writer

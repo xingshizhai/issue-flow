@@ -8,6 +8,8 @@ Issue Flow gives coding agents a deterministic workflow for automatically handli
 
 Run `make check` before submitting changes. It checks formatting, unit and integration tests, the race detector, and `go vet`; GitHub CI repeats these checks and builds on Linux, macOS, and Windows.
 
+Create unsigned local snapshot binaries with `make snapshot VERSION=0.1.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts. A formal module path, release host, signing policy, and supported architecture matrix must be decided before a public release.
+
 ## Install
 
 Build from a trusted checkout until a Go module path and releases are published:

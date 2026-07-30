@@ -8,6 +8,8 @@ Issue Flow 为代码开发 Agent 提供确定性的自动化工作流，用于�
 
 提交改动前运行 `make check`，它会检查格式、单元与集成测试、race detector 和 `go vet`；GitHub CI 会重复这些检查，并在 Linux、macOS 和 Windows 上构建。
 
+运行 `make snapshot VERSION=0.1.0-dev` 可生成未签名的本地快照：`dist/` 下包含经过 `-trimpath` 构建的 Linux amd64、macOS arm64、Windows amd64 二进制和 `checksums.txt`。该命令不会发布或签名产物。公开发布前仍需确定正式 module 路径、发布平台、签名策略和支持的架构矩阵。
+
 ## 安装
 
 Go module 路径和正式版本发布前，从可信检出版本构建：
