@@ -37,7 +37,7 @@ func TestLeaseAuthorizationRequiresSecretToken(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 7, 30, 0, 0, 0, 0, time.UTC)
 	lease := Lease{
-		AgentID: "codex-a", ClaimToken: "secret-token",
+		ID: "lease_test", AgentID: "codex-a", TokenHash: HashLeaseToken("secret-token"),
 		ClaimedAt: now, HeartbeatAt: now, ExpiresAt: now.Add(time.Hour),
 	}
 	if !lease.Authorizes("codex-a", "secret-token", now) {

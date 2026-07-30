@@ -143,7 +143,8 @@ const (
 
 ```go
 type Lease struct {
-    ClaimToken string
+    ID         string
+    TokenHash  string
     AgentID    string
     ClaimedAt  time.Time
     ExpiresAt  time.Time
@@ -160,7 +161,8 @@ type Lease struct {
 
 MVP 优先使用“机器可解析的固定评论 + 工作流标签”，但必须：
 
-- 评论带版本和 claim token。
+- 评论带版本、公开 lease ID 和 token 哈希，不得包含明文租约 token。
+- 明文 token 只在 claim 成功响应中返回一次，通用 Issue 输出必须隐藏 token 哈希。
 - 解析时忽略不合法或被篡改的记录。
 - 追加事件而非频繁覆盖用户正文。
 - 文档说明 Gitee 缺少强 CAS 时只能实现尽力原子。
@@ -308,12 +310,12 @@ Gitee 是否支持适合 Issue 更新的强条件写入，需要实现阶段基�
 
 1. 读取 Issue、标签、最新租约事件和版本标识。
 2. 校验状态为 `ready` 且无有效租约。
-3. 生成随机 `claimToken` 和 `operationId`。
+3. 生成随机明文租约 token、token 哈希、公开 lease ID 和 `operationId`。
 4. 写入 claim 事件。
 5. 更新工作流标签为 `claimed`。
 6. 再次读取 Issue。
 7. 收集竞争窗口内的所有有效 claim。
-8. 通过确定性规则选出胜者，例如最早 Provider 时间戳，再以 claim token 排序。
+8. 通过确定性规则选出胜者，例如最早 Provider 时间戳，再以公开 lease ID 排序。
 9. 非胜者写入冲突事件并返回 `LEASE_CONFLICT`。
 
 这仍不是分布式事务，但结果可收敛且不会让两个 Agent 都误以为长期持有租约。若未来需要强一致，可增加外部协调后端。
@@ -539,4 +541,3 @@ init → doctor → list → claim → start → progress → finish
 - 文档和示例配置与实现一致。
 - 没有密钥或敏感信息进入仓库和日志。
 - 新 Agent 能仅根据仓库文档继续后续开发。
-

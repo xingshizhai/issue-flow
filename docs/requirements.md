@@ -147,13 +147,17 @@ issue-flow claim 123 --agent <agent-id>
 4. 重新读取并确认调用方持有租约。
 5. 遇到并发冲突时失败，不得覆盖其他 Agent。
 
+成功领取只返回一次不可预测的明文租约 token。后续持有者操作必须同时提供
+agent ID 和租约 token；Provider 只能持久化 token 哈希和公开 lease ID，
+通用 Issue 输出不得暴露 token 或 token 哈希。
+
 Gitee API 若无法提供真正的条件更新，MVP 必须明确其“尽力原子”限制，并通过变更前后校验、唯一 claim token 和冲突检测降低风险。
 
 ### FR-05 租约与心跳
 
 ```bash
-issue-flow heartbeat 123
-issue-flow release 123
+issue-flow heartbeat 123 --agent <agent-id> --lease-token <token>
+issue-flow release 123 --agent <agent-id> --lease-token <token>
 ```
 
 - 默认租约建议为 120 分钟，可配置。
@@ -384,4 +388,3 @@ MVP 完成必须满足：
 - 全量附件存储服务。
 - GitHub、GitLab 和 Forgejo 的正式实现。
 - 通用 Web UI 组件。
-

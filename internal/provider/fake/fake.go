@@ -30,13 +30,16 @@ func New(path string) *Store {
 func (s *Store) Capabilities(context.Context) provider.Capabilities {
 	return provider.Capabilities{
 		ReadIssues:      true,
-		WriteIssues:     false,
-		StrongClaimCAS:  false,
-		IdempotencyKeys: false,
+		WriteIssues:     true,
+		StrongClaimCAS:  true,
+		IdempotencyKeys: true,
 	}
 }
 
-func (s *Store) ListIssues(_ context.Context, query provider.ListQuery) (provider.IssuePage, error) {
+func (s *Store) ListIssues(ctx context.Context, query provider.ListQuery) (provider.IssuePage, error) {
+	if err := ctx.Err(); err != nil {
+		return provider.IssuePage{}, err
+	}
 	data, err := s.read()
 	if err != nil {
 		return provider.IssuePage{}, err
@@ -75,7 +78,10 @@ func (s *Store) ListIssues(_ context.Context, query provider.ListQuery) (provide
 	return page, nil
 }
 
-func (s *Store) GetIssue(_ context.Context, number int) (domain.Issue, error) {
+func (s *Store) GetIssue(ctx context.Context, number int) (domain.Issue, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.Issue{}, err
+	}
 	data, err := s.read()
 	if err != nil {
 		return domain.Issue{}, err
@@ -89,6 +95,10 @@ func (s *Store) GetIssue(_ context.Context, number int) (domain.Issue, error) {
 }
 
 func (s *Store) read() (fileData, error) {
+	return s.readUnlocked()
+}
+
+func (s *Store) readUnlocked() (fileData, error) {
 	raw, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return fileData{Version: 1, Issues: []domain.Issue{}}, nil
@@ -107,6 +117,117 @@ func (s *Store) read() (fileData, error) {
 		data.Issues = []domain.Issue{}
 	}
 	return data, nil
+}
+
+func (s *Store) UpdateIssue(ctx context.Context, number int, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
+	var updated domain.Issue
+	err := s.withLock(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		data, err := s.readUnlocked()
+		if err != nil {
+			return err
+		}
+		index := -1
+		for i := range data.Issues {
+			if data.Issues[i].Number == number {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			return fmt.Errorf("%w: %d", provider.ErrNotFound, number)
+		}
+		current := data.Issues[index]
+		for _, event := range current.Events {
+			if event.OperationID == change.Event.OperationID {
+				updated = current
+				return nil
+			}
+		}
+		if precondition.Version != "" && current.Version != precondition.Version {
+			return fmt.Errorf("%w: version changed", provider.ErrPreconditionFailed)
+		}
+		if precondition.WorkflowState != "" && current.WorkflowState != precondition.WorkflowState {
+			return fmt.Errorf("%w: state is %s", provider.ErrPreconditionFailed, current.WorkflowState)
+		}
+		if precondition.LeaseID != "" && (current.Lease == nil || current.Lease.ID != precondition.LeaseID) {
+			return fmt.Errorf("%w: lease changed", provider.ErrPreconditionFailed)
+		}
+		if change.WorkflowState != nil {
+			current.WorkflowState = *change.WorkflowState
+		}
+		if change.ClearLease {
+			current.Lease = nil
+		} else if change.Lease != nil {
+			lease := *change.Lease
+			current.Lease = &lease
+		}
+		current.Events = append(current.Events, change.Event)
+		current.UpdatedAt = change.Event.OccurredAt
+		current.Version = nextVersion(current.Version)
+		data.Issues[index] = current
+		if err := s.writeUnlocked(data); err != nil {
+			return err
+		}
+		updated = current
+		return nil
+	})
+	return updated, err
+}
+
+func nextVersion(current string) string {
+	value, err := strconv.ParseUint(current, 10, 64)
+	if err != nil {
+		value = 0
+	}
+	return strconv.FormatUint(value+1, 10)
+}
+
+func (s *Store) writeUnlocked(data fileData) error {
+	directory := filepath.Dir(s.path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(directory, ".issue-flow-fake-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempName := temp.Name()
+	defer os.Remove(tempName)
+	if err := temp.Chmod(0o600); err != nil {
+		temp.Close()
+		return err
+	}
+	encoder := json.NewEncoder(temp)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	return replaceFile(tempName, s.path)
+}
+
+func (s *Store) withLock(operation func() error) error {
+	lock, err := os.OpenFile(s.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	unlock, err := lockFile(lock)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return operation()
 }
 
 func ResolvePath(configPath, dataPath string) string {

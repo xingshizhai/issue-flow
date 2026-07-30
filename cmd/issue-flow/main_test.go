@@ -5,9 +5,32 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"issue-flow/internal/domain"
 )
+
+func TestCLIHelperProcess(t *testing.T) {
+	if os.Getenv("ISSUE_FLOW_TEST_HELPER") != "1" {
+		return
+	}
+	separator := -1
+	for i, arg := range os.Args {
+		if arg == "--" {
+			separator = i
+			break
+		}
+	}
+	if separator < 0 {
+		os.Exit(99)
+	}
+	code := (&cli{stdout: os.Stdout, stderr: os.Stderr}).run(context.Background(), os.Args[separator+1:])
+	os.Exit(code)
+}
 
 func TestInitDoctorAndListJSON(t *testing.T) {
 	t.Parallel()
@@ -29,6 +52,148 @@ func TestInitDoctorAndListJSON(t *testing.T) {
 		t.Fatalf("list code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	assertEnvelope(t, stdout, true, "")
+}
+
+func TestLeaseWorkflowAndAuthorization(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: 1, Title: "fix bug", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("claim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	token := leaseTokenFromEnvelope(t, stdout)
+	if token == "" {
+		t.Fatal("claim did not return a lease token")
+	}
+	if strings.Contains(stdout, "tokenHash") {
+		t.Fatal("claim output leaked the stored token hash")
+	}
+
+	code, stdout, stderr = invoke("start", "1", "--agent", "codex-a", "--lease-token", "wrong", "--project", project, "--json")
+	if code != 5 || stderr != "" {
+		t.Fatalf("unauthorized start code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	assertEnvelope(t, stdout, false, "LEASE_CONFLICT")
+
+	code, stdout, stderr = invoke("start", "1", "--agent", "codex-a", "--lease-token", token, "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("start code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = invoke("heartbeat", "1", "--agent", "codex-a", "--lease-token", token, "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("heartbeat code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = invoke("release", "1", "--agent", "codex-a", "--lease-token", token, "--reason", "handoff", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("release code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Issue.WorkflowState != domain.StateReady || envelope.Data.Issue.Lease != nil {
+		t.Fatalf("release result = %+v", envelope.Data.Issue)
+	}
+}
+
+func TestReclaimExpiredLease(t *testing.T) {
+	t.Parallel()
+	expiredToken := "expired-secret"
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: 1, Title: "expired", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateWorking, Version: "1", CreatedAt: time.Now().UTC(),
+		Lease: &domain.Lease{
+			ID: "lease_expired", AgentID: "old-agent",
+			TokenHash: domain.HashLeaseToken(expiredToken),
+			ClaimedAt: time.Now().Add(-3 * time.Hour),
+			ExpiresAt: time.Now().Add(-time.Hour),
+		},
+	})
+	code, stdout, stderr := invoke("reclaim", "1", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("reclaim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Issue.WorkflowState != domain.StateReady || envelope.Data.Issue.Lease != nil {
+		t.Fatalf("reclaim result = %+v", envelope.Data.Issue)
+	}
+}
+
+func TestClaimDryRunDoesNotMutate(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: 1, Title: "dry run", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke("claim", "1", "--agent", "codex-a", "--dry-run", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("dry-run claim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = invoke("show", "1", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("show code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.WorkflowState != domain.StateReady || envelope.Data.Lease != nil {
+		t.Fatalf("dry-run mutated issue: %+v", envelope.Data)
+	}
+}
+
+func TestTwoCLIProcessesCannotBothClaim(t *testing.T) {
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: 1, Title: "process race", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	commands := make([]*exec.Cmd, 2)
+	outputs := make([]bytes.Buffer, 2)
+	for i := range commands {
+		commands[i] = exec.Command(os.Args[0],
+			"-test.run=^TestCLIHelperProcess$", "--",
+			"claim", "1", "--agent", "agent-"+string(rune('a'+i)),
+			"--project", project, "--json",
+		)
+		commands[i].Env = append(os.Environ(), "ISSUE_FLOW_TEST_HELPER=1")
+		commands[i].Stdout = &outputs[i]
+		commands[i].Stderr = &outputs[i]
+		if err := commands[i].Start(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	successes := 0
+	conflicts := 0
+	for i, command := range commands {
+		err := command.Wait()
+		switch {
+		case err == nil:
+			successes++
+		case command.ProcessState.ExitCode() == 5:
+			conflicts++
+		default:
+			t.Fatalf("process %d error=%v output=%q", i, err, outputs[i].String())
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d outputs=%q", successes, conflicts, outputs)
+	}
 }
 
 func TestInitRefusesOverwrite(t *testing.T) {
@@ -104,4 +269,44 @@ func assertEnvelope(t *testing.T, raw string, ok bool, errorCode string) {
 	if errorCode != "" && (envelope.Error == nil || envelope.Error.Code != errorCode) {
 		t.Fatalf("error = %+v, want %s", envelope.Error, errorCode)
 	}
+}
+
+func seededProject(t *testing.T, issues ...domain.Issue) string {
+	t.Helper()
+	project := t.TempDir()
+	configBody := []byte(`
+version: 1
+provider:
+  type: fake
+  data_file: issues.json
+workflow:
+  ready_label: agent:ready
+  review_label: agent:review
+  lease_minutes: 120
+  auto_close: false
+`)
+	if err := os.WriteFile(filepath.Join(project, ".issue-flow.yaml"), configBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(map[string]any{"version": 1, "issues": issues})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "issues.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return project
+}
+
+func leaseTokenFromEnvelope(t *testing.T, raw string) string {
+	t.Helper()
+	var envelope struct {
+		Data struct {
+			LeaseToken string `json:"leaseToken"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	return envelope.Data.LeaseToken
 }

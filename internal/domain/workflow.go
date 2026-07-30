@@ -1,6 +1,9 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -33,7 +36,8 @@ func IsWorkflowState(value WorkflowState) bool {
 }
 
 type Lease struct {
-	ClaimToken  string    `json:"claimToken"`
+	ID          string    `json:"id"`
+	TokenHash   string    `json:"tokenHash,omitempty"`
 	AgentID     string    `json:"agentId"`
 	ClaimedAt   time.Time `json:"claimedAt"`
 	ExpiresAt   time.Time `json:"expiresAt"`
@@ -41,9 +45,20 @@ type Lease struct {
 }
 
 func (l Lease) ValidAt(now time.Time) bool {
-	return l.ClaimToken != "" && l.AgentID != "" && now.Before(l.ExpiresAt)
+	return l.ID != "" && l.TokenHash != "" && l.AgentID != "" && now.Before(l.ExpiresAt)
 }
 
-func (l Lease) Authorizes(agentID, claimToken string, now time.Time) bool {
-	return l.ValidAt(now) && l.AgentID == agentID && l.ClaimToken == claimToken
+func (l Lease) Authorizes(agentID, leaseToken string, now time.Time) bool {
+	actual, err := hex.DecodeString(l.TokenHash)
+	if err != nil {
+		return false
+	}
+	expected := sha256.Sum256([]byte(leaseToken))
+	return l.ValidAt(now) && l.AgentID == agentID &&
+		subtle.ConstantTimeCompare(actual, expected[:]) == 1
+}
+
+func HashLeaseToken(leaseToken string) string {
+	sum := sha256.Sum256([]byte(leaseToken))
+	return hex.EncodeToString(sum[:])
 }

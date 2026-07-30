@@ -4,16 +4,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"issue-flow/internal/clock"
 	"issue-flow/internal/config"
 	"issue-flow/internal/provider"
 	"issue-flow/internal/provider/fake"
+	"issue-flow/internal/workflow"
 )
 
 type Runtime struct {
 	ConfigPath string
 	Config     config.Config
 	Provider   provider.Provider
+}
+
+func (r *Runtime) Workflow() *workflow.Service {
+	return workflow.New(r.Provider, clock.Real{}, time.Duration(r.Config.Workflow.LeaseMinutes)*time.Minute)
 }
 
 func Open(configPath, project string) (*Runtime, error) {
