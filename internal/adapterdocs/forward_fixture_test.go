@@ -21,7 +21,11 @@ func TestSkillForwardFixtureStartsReadyAndFailing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := fake.New(fake.ResolvePath(filepath.Join(fixture, config.DefaultName), cfg.Provider.DataFile))
+	dataPath, err := fake.ResolvePath(filepath.Join(fixture, config.DefaultName), cfg.Provider.DataFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := fake.New(dataPath)
 	page, err := store.ListIssues(context.Background(), provider.ListQuery{
 		State: domain.StateReady,
 		Limit: 10,

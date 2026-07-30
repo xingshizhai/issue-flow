@@ -106,15 +106,30 @@ func (s *Store) read() (fileData, error) {
 }
 
 func (s *Store) readUnlocked() (fileData, error) {
-	raw, err := os.ReadFile(s.path)
+	info, err := os.Lstat(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return fileData{Version: 1, Issues: []domain.Issue{}}, nil
 	}
 	if err != nil {
 		return fileData{}, err
 	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fileData{}, fmt.Errorf("fake provider data must be a regular file, not a symlink")
+	}
+	file, err := os.Open(s.path)
+	if err != nil {
+		return fileData{}, err
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return fileData{}, err
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return fileData{}, fmt.Errorf("fake provider data changed while opening")
+	}
 	var data fileData
-	if err := json.Unmarshal(raw, &data); err != nil {
+	if err := json.NewDecoder(file).Decode(&data); err != nil {
 		return fileData{}, fmt.Errorf("decode fake provider data %s: %w", s.path, err)
 	}
 	if data.Version != 1 {
@@ -244,9 +259,22 @@ func (s *Store) withLock(operation func() error) error {
 	return operation()
 }
 
-func ResolvePath(configPath, dataPath string) string {
-	if filepath.IsAbs(dataPath) {
-		return dataPath
+func ResolvePath(configPath, dataPath string) (string, error) {
+	cleaned := filepath.Clean(dataPath)
+	if filepath.IsAbs(dataPath) || cleaned == "." || cleaned == ".." ||
+		filepath.Base(cleaned) != cleaned {
+		return "", fmt.Errorf("fake provider data path must be a filename inside the configuration directory")
 	}
-	return filepath.Join(filepath.Dir(configPath), dataPath)
+	path := filepath.Join(filepath.Dir(configPath), cleaned)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return path, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("fake provider data must be a regular file, not a symlink")
+	}
+	return path, nil
 }

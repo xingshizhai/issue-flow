@@ -44,7 +44,11 @@ func Open(configPath, project string) (*Runtime, error) {
 	var p provider.Provider
 	switch cfg.Provider.Type {
 	case "fake":
-		p = fake.New(fake.ResolvePath(path, cfg.Provider.DataFile))
+		dataPath, err := fake.ResolvePath(path, cfg.Provider.DataFile)
+		if err != nil {
+			return nil, err
+		}
+		p = fake.New(dataPath)
 	case "gitee":
 		token := os.Getenv(cfg.Provider.TokenEnv)
 		if token == "" {

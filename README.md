@@ -103,6 +103,8 @@ After making and validating the intended change, create `result.md` as a regular
 
 The final Issue state should be `review`. To exercise other terminal paths, start from a fresh copy of the example data and use `block` or `release` instead of `finish`. Add `--dry-run` to any write command to preview it without mutating the Fake store.
 
+For safety, `provider.data_file` must be a plain filename directly inside the configuration directory. Absolute paths, subdirectories, traversal, symlinks, and non-regular files are rejected.
+
 All environments share the same CLI and JSON contract. The repository includes a [Codex Skill](skills/issue-flow/SKILL.md) and thin [Claude Code](adapters/claude/CLAUDE.md), [Cursor](adapters/cursor/issue-flow.mdc), and [VS Code](adapters/vscode/issue-flow.instructions.md) adapters based on the [shared agent contract](adapters/generic/agent-workflow.md). See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
 Use the [isolated Skill forward-test guide](docs/skill-forward-test.md) to evaluate a fresh agent session. The tracked fixture is automatically checked to remain ready and initially failing; an actual fresh-session run is still required to evaluate agent behavior.

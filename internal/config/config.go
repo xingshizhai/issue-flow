@@ -141,6 +141,11 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(c.Provider.DataFile) == "" {
 			return errors.New("provider.data_file is required for fake provider")
 		}
+		cleaned := filepath.Clean(c.Provider.DataFile)
+		if filepath.IsAbs(c.Provider.DataFile) || cleaned == "." ||
+			cleaned == ".." || filepath.Base(cleaned) != cleaned {
+			return errors.New("provider.data_file must be a filename inside the configuration directory")
+		}
 	case "gitee":
 		if c.Provider.Owner == "" || c.Provider.Repo == "" || c.Provider.TokenEnv == "" {
 			return errors.New("provider owner, repo, and token_env are required for gitee")

@@ -103,6 +103,8 @@ cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
 
 最终 Issue 状态应为 `review`。如需演练其他结束路径，请重新复制示例数据，并以 `block` 或 `release` 代替 `finish`。任何写命令均可增加 `--dry-run`，在不修改 Fake 存储的情况下预览结果。
 
+出于安全考虑，`provider.data_file` 必须是配置目录内的普通文件名。绝对路径、子目录、路径穿越、符号链接和非普通文件都会被拒绝。
+
 所有环境共享同一 CLI 和 JSON 契约。仓库已提供 [Codex Skill](skills/issue-flow/SKILL.md)，以及基于[通用 Agent 契约](adapters/generic/agent-workflow.md)的 [Claude Code](adapters/claude/CLAUDE.md)、[Cursor](adapters/cursor/issue-flow.mdc)和 [VS Code](adapters/vscode/issue-flow.instructions.md)薄适配器。参阅[需求规格](docs/requirements.md)和[技术方案](docs/architecture.md)。
 
 使用 [Skill 隔离前向测试指南](docs/skill-forward-test.md)评估全新的 Agent 会话。自动测试会保证受版本控制的夹具始终处于 ready 且初始验证失败的状态；评估 Agent 行为仍必须实际运行全新会话。

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,6 +142,48 @@ func TestUpdateRejectsOperationIDSemanticCollision(t *testing.T) {
 		provider.Precondition{Version: "2"},
 	)
 	if !errors.Is(err, provider.ErrPreconditionFailed) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestResolvePathRejectsEscapeAndSymlink(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configPath := filepath.Join(root, ".issue-flow.yaml")
+	for _, dataPath := range []string{"../outside.json", "nested/issues.json", filepath.Join(root, "absolute.json")} {
+		if _, err := ResolvePath(configPath, dataPath); err == nil {
+			t.Errorf("ResolvePath(%q) succeeded", dataPath)
+		}
+	}
+	target := filepath.Join(root, "target.json")
+	if err := os.WriteFile(target, []byte(`{"version":1,"issues":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "issues.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := ResolvePath(configPath, "issues.json"); err == nil ||
+		!strings.Contains(err.Error(), "not a symlink") {
+		t.Fatalf("symlink error = %v", err)
+	}
+}
+
+func TestStoreRejectsSymlinkDataFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	target := filepath.Join(root, "target.json")
+	if err := os.WriteFile(target, []byte(`{"version":1,"issues":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "issues.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	_, err := New(link).ListIssues(context.Background(), provider.ListQuery{})
+	if err == nil || !strings.Contains(err.Error(), "not a symlink") {
 		t.Fatalf("error = %v", err)
 	}
 }

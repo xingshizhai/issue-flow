@@ -83,3 +83,16 @@ func TestValidateStructuredCommandsAndGitPolicy(t *testing.T) {
 		t.Fatalf("unknown placeholder error = %v", err)
 	}
 }
+
+func TestValidateRejectsFakeDataOutsideConfigDirectory(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{"../issues.json", "nested/issues.json", "/tmp/issues.json"} {
+		cfg := Default()
+		cfg.Provider.DataFile = path
+		if err := cfg.Validate(); err == nil ||
+			!strings.Contains(err.Error(), "inside the configuration directory") {
+			t.Errorf("data_file %q error = %v", path, err)
+		}
+	}
+}
