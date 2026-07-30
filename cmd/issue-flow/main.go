@@ -380,19 +380,23 @@ func (c *cli) open(g globals) (*app.Runtime, int) {
 }
 
 func (c *cli) providerFailure(format string, err error) int {
+	return c.providerFailureWithID(format, operationID(), err)
+}
+
+func (c *cli) providerFailureWithID(format, operationID string, err error) int {
 	switch {
 	case errors.Is(err, provider.ErrAuthentication):
-		return c.fail(format, "AUTHENTICATION_FAILED", err, 3)
+		return c.failWithIDRetryable(format, operationID, "AUTHENTICATION_FAILED", err, 3, false)
 	case errors.Is(err, provider.ErrPermission):
-		return c.fail(format, "PERMISSION_DENIED", err, 3)
+		return c.failWithIDRetryable(format, operationID, "PERMISSION_DENIED", err, 3, false)
 	case errors.Is(err, provider.ErrNotFound):
-		return c.fail(format, "NOT_FOUND", err, 4)
+		return c.failWithIDRetryable(format, operationID, "NOT_FOUND", err, 4, false)
 	case errors.Is(err, provider.ErrRateLimited):
-		return c.fail(format, "RATE_LIMITED", err, 6)
+		return c.failWithIDRetryable(format, operationID, "RATE_LIMITED", err, 6, true)
 	case errors.Is(err, provider.ErrUnsupported):
-		return c.fail(format, "UNSUPPORTED_CAPABILITY", err, 6)
+		return c.failWithIDRetryable(format, operationID, "UNSUPPORTED_CAPABILITY", err, 6, false)
 	default:
-		return c.fail(format, "PROVIDER_UNAVAILABLE", err, 6)
+		return c.failWithIDRetryable(format, operationID, "PROVIDER_UNAVAILABLE", err, 6, true)
 	}
 }
 
@@ -407,7 +411,7 @@ func (c *cli) workflowFailure(format, operationID string, err error) int {
 	case errors.Is(err, workflow.ErrLeaseConflict), errors.Is(err, workflow.ErrLeaseExpired):
 		return c.failWithID(format, operationID, "LEASE_CONFLICT", err, 5)
 	default:
-		return c.failWithID(format, operationID, "PROVIDER_UNAVAILABLE", err, 6)
+		return c.providerFailureWithID(format, operationID, err)
 	}
 }
 
@@ -431,10 +435,14 @@ func (c *cli) fail(format, code string, err error, exitCode int) int {
 }
 
 func (c *cli) failWithID(format, operationID, code string, err error, exitCode int) int {
+	return c.failWithIDRetryable(format, operationID, code, err, exitCode, false)
+}
+
+func (c *cli) failWithIDRetryable(format, operationID, code string, err error, exitCode int, retryable bool) int {
 	if format == "json" {
 		_ = output.JSON(c.stdout, output.Envelope{
 			OK: false, OperationID: operationID,
-			Error: &output.Error{Code: code, Message: err.Error()},
+			Error: &output.Error{Code: code, Message: err.Error(), Retryable: retryable},
 		})
 	} else {
 		fmt.Fprintf(c.stderr, "issue-flow: %s\n", err)

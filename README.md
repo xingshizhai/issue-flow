@@ -57,6 +57,8 @@ Add `--verbose` when troubleshooting configuration selection or Provider capabil
 
 `show`, `list`, `context`, and workflow results redact configured secret-like key/value patterns from Issue text. Progress messages, block/release reasons, and finish summaries are redacted before Provider writes. Defaults include passwords, tokens, cookies, authorization values, API keys, secrets, and private keys; extend them with `security.redact_keys`.
 
+JSON errors preserve the write operation ID and include a stable code plus `retryable`. `RATE_LIMITED` and `PROVIDER_UNAVAILABLE` are retryable; authentication, permission, not-found, unsupported-capability, state, lease, configuration, and input failures are not.
+
 The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
 ```bash

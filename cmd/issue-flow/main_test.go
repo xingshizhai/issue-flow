@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"issue-flow/internal/domain"
+	"issue-flow/internal/output"
+	"issue-flow/internal/provider"
 )
 
 func TestCLIHelperProcess(t *testing.T) {
@@ -63,6 +65,65 @@ func TestVersion(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "0.1.0-dev" {
 		t.Fatalf("version output = %q", stdout)
+	}
+}
+
+func TestProviderErrorMappingAndRetryability(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		err       error
+		code      string
+		exitCode  int
+		retryable bool
+	}{
+		{"authentication", provider.ErrAuthentication, "AUTHENTICATION_FAILED", 3, false},
+		{"permission", provider.ErrPermission, "PERMISSION_DENIED", 3, false},
+		{"not found", provider.ErrNotFound, "NOT_FOUND", 4, false},
+		{"rate limited", provider.ErrRateLimited, "RATE_LIMITED", 6, true},
+		{"unsupported", provider.ErrUnsupported, "UNSUPPORTED_CAPABILITY", 6, false},
+		{"unavailable", provider.ErrUnavailable, "PROVIDER_UNAVAILABLE", 6, true},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var stdout, stderr bytes.Buffer
+			command := &cli{stdout: &stdout, stderr: &stderr}
+			exitCode := command.providerFailureWithID("json", "op_test", test.err)
+			if exitCode != test.exitCode || stderr.Len() != 0 {
+				t.Fatalf("exit=%d stderr=%q", exitCode, stderr.String())
+			}
+			var envelope output.Envelope
+			if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.OperationID != "op_test" || envelope.Error == nil ||
+				envelope.Error.Code != test.code ||
+				envelope.Error.Retryable != test.retryable {
+				t.Fatalf("envelope = %+v", envelope)
+			}
+		})
+	}
+}
+
+func TestWorkflowProviderErrorPreservesOperationID(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	command := &cli{stdout: &stdout, stderr: &stderr}
+	exitCode := command.workflowFailure("json", "op_write", provider.ErrPermission)
+	if exitCode != 3 || stderr.Len() != 0 {
+		t.Fatalf("exit=%d stderr=%q", exitCode, stderr.String())
+	}
+	var envelope output.Envelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.OperationID != "op_write" || envelope.Error == nil ||
+		envelope.Error.Code != "PERMISSION_DENIED" || envelope.Error.Retryable {
+		t.Fatalf("envelope = %+v", envelope)
 	}
 }
 

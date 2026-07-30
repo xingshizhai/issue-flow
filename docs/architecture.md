@@ -275,6 +275,10 @@ issue-flow finish <issue>
 
 JSON 字段一旦发布应保持向后兼容。
 
+`retryable` 只对 `RATE_LIMITED` 和 `PROVIDER_UNAVAILABLE` 为 `true`。认证、权限、
+目标不存在、不支持的能力、状态、租约和输入错误必须为 `false`。工作流写操作的
+Provider 错误沿用原 operation ID，不得在错误映射时生成新的 ID。
+
 ## 8. 退出码建议
 
 | 退出码 | 类型 |
