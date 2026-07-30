@@ -102,7 +102,11 @@ func mapHTTPError(response *http.Response) error {
 	var category error
 	switch response.StatusCode {
 	case http.StatusUnauthorized:
-		category = provider.ErrAuthentication
+		if strings.Contains(message, "权限") || strings.Contains(strings.ToLower(message), "permission") {
+			category = provider.ErrPermission
+		} else {
+			category = provider.ErrAuthentication
+		}
 	case http.StatusForbidden:
 		category = provider.ErrPermission
 	case http.StatusNotFound:

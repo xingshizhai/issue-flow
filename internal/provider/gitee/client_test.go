@@ -31,6 +31,20 @@ func TestClientMapsErrorsWithoutLeakingToken(t *testing.T) {
 	}
 }
 
+func TestClientMapsGiteePermissionMessageOn401(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"需要企业管理员权限"}`))
+	})
+	client := NewClientWithBaseURL("https://gitee.test", "secret", memoryHTTPClient(handler))
+	_, err := client.get(context.Background(), "/test", nil, &struct{}{})
+	if !errors.Is(err, provider.ErrPermission) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestClientLimitsResponseBody(t *testing.T) {
 	t.Parallel()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
