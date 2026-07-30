@@ -206,7 +206,9 @@ type Provider interface {
 
 ### 6.1 Gitee 访问适配
 
-Gitee Provider 对核心暴露统一接口，下层组合 REST transport（环境 Token 或 OAuth credential）或 MCP transport（已配置的 Gitee MCP Server）。transport 不得决定状态转换，所有方式共用 workflow、幂等、租约和审计。OAuth 刷新凭据不得进入项目配置或日志；MCP 返回同样按不可信输入校验和脱敏。缺少写入、幂等或版本前置条件时，通过 `Capabilities` 表达并返回 `UNSUPPORTED_CAPABILITY`。MVP 可先实现 REST + Token，但必须为 REST + OAuth 与 MCP 保留配置和契约测试边界。
+Gitee Provider 对核心暴露统一接口，下层组合 REST transport（环境 Token 或 OAuth credential）或 MCP transport（已配置的 Gitee MCP Server）。transport 不得决定状态转换，所有方式共用 workflow、幂等、租约和审计。OAuth 刷新凭据不得进入项目配置或日志；MCP 返回同样按不可信输入校验和脱敏。缺少写入、幂等或版本前置条件时，通过 `Capabilities` 表达并返回 `UNSUPPORTED_CAPABILITY`。
+
+当前 MVP 配置只启用 REST + Token。代码已抽取 `Transport`、`Credential` 和 `OAuthCredentialSource` 边界，OAuth access token 在每次请求时从外部源解析，以便刷新逻辑和 refresh token 留在项目配置之外；MCP 工厂在尚未实现时明确返回不支持错误，不得静默回退。`doctor` 的能力输出包含 transport、credential mode 和凭据是否可刷新。OAuth/MCP 配置接线与实际 MCP 适配器属于后续实现。
 
 ## 7. 命令设计
 

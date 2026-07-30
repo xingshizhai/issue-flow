@@ -373,6 +373,8 @@ func (c *cli) providerFailure(format string, err error) int {
 		return c.fail(format, "NOT_FOUND", err, 4)
 	case errors.Is(err, provider.ErrRateLimited):
 		return c.fail(format, "RATE_LIMITED", err, 6)
+	case errors.Is(err, provider.ErrUnsupported):
+		return c.fail(format, "UNSUPPORTED_CAPABILITY", err, 6)
 	default:
 		return c.fail(format, "PROVIDER_UNAVAILABLE", err, 6)
 	}

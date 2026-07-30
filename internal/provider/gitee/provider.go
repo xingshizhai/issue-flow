@@ -17,7 +17,7 @@ import (
 )
 
 type Provider struct {
-	client   *Client
+	client   Transport
 	owner    string
 	repo     string
 	workflow config.Workflow
@@ -27,13 +27,16 @@ type Provider struct {
 	actorErr  error
 }
 
-func New(client *Client, owner, repo string, workflow config.Workflow) *Provider {
+func New(client Transport, owner, repo string, workflow config.Workflow) *Provider {
 	return &Provider{client: client, owner: owner, repo: repo, workflow: workflow}
 }
 
 func (p *Provider) Capabilities(context.Context) provider.Capabilities {
+	access := p.client.AccessCapabilities()
 	return provider.Capabilities{
 		ReadIssues: true, WriteIssues: true, StrongClaimCAS: false, IdempotencyKeys: true,
+		AccessTransport: access.Transport, CredentialMode: access.CredentialMode,
+		RefreshableCredential: access.RefreshableCredential,
 	}
 }
 
@@ -44,7 +47,7 @@ func (p *Provider) Check(ctx context.Context) error {
 	var repository struct {
 		ID int64 `json:"id"`
 	}
-	_, err := p.client.get(ctx, p.repoPath(""), nil, &repository)
+	_, err := p.client.Get(ctx, p.repoPath(""), nil, &repository)
 	return err
 }
 
@@ -76,7 +79,7 @@ func (p *Provider) ListIssues(ctx context.Context, query provider.ListQuery) (pr
 		values.Set("labels", label)
 	}
 	var payload []issueDTO
-	response, err := p.client.get(ctx, p.repoPath("/issues"), values, &payload)
+	response, err := p.client.Get(ctx, p.repoPath("/issues"), values, &payload)
 	if err != nil {
 		return provider.IssuePage{}, err
 	}
@@ -94,7 +97,7 @@ func (p *Provider) ListIssues(ctx context.Context, query provider.ListQuery) (pr
 
 func (p *Provider) GetIssue(ctx context.Context, number string) (domain.Issue, error) {
 	var issue issueDTO
-	if _, err := p.client.get(ctx, p.repoPath("/issues/"+url.PathEscape(number)), nil, &issue); err != nil {
+	if _, err := p.client.Get(ctx, p.repoPath("/issues/"+url.PathEscape(number)), nil, &issue); err != nil {
 		return domain.Issue{}, err
 	}
 	comments, err := p.listComments(ctx, number)
@@ -124,7 +127,7 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 		if event.OperationID == change.Event.OperationID {
 			if change.WorkflowState != nil && !p.hasWorkflowLabel(current.Labels, *change.WorkflowState) {
 				labels := p.replaceWorkflowLabel(current.Labels, *change.WorkflowState)
-				if _, err := p.client.do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
+				if _, err := p.client.Do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
 					return domain.Issue{}, fmt.Errorf("resume label update: %w", err)
 				}
 				return p.GetIssue(ctx, number)
@@ -137,13 +140,13 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 		return domain.Issue{}, err
 	}
 	var comment noteDTO
-	if _, err := p.client.do(ctx, http.MethodPost, p.repoPath("/issues/"+url.PathEscape(number)+"/comments"), nil,
+	if _, err := p.client.Do(ctx, http.MethodPost, p.repoPath("/issues/"+url.PathEscape(number)+"/comments"), nil,
 		map[string]string{"body": eventBody}, &comment); err != nil {
 		return domain.Issue{}, err
 	}
 	if change.WorkflowState != nil {
 		labels := p.replaceWorkflowLabel(current.Labels, *change.WorkflowState)
-		if _, err := p.client.do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
+		if _, err := p.client.Do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
 			return domain.Issue{}, fmt.Errorf("event written but label update failed: %w", err)
 		}
 	}
@@ -169,7 +172,7 @@ func (p *Provider) listComments(ctx context.Context, number string) ([]noteDTO, 
 	for page := 1; ; page++ {
 		var batch []noteDTO
 		values := url.Values{"page": {strconv.Itoa(page)}, "per_page": {"100"}}
-		if _, err := p.client.get(ctx, p.repoPath("/issues/"+url.PathEscape(number)+"/comments"), values, &batch); err != nil {
+		if _, err := p.client.Get(ctx, p.repoPath("/issues/"+url.PathEscape(number)+"/comments"), values, &batch); err != nil {
 			return nil, err
 		}
 		all = append(all, batch...)
@@ -284,7 +287,7 @@ func (p *Provider) applyEvents(ctx context.Context, issue *domain.Issue, notes [
 func (p *Provider) currentActor(ctx context.Context) (string, error) {
 	p.actorOnce.Do(func() {
 		var user userDTO
-		_, p.actorErr = p.client.get(ctx, "/user", nil, &user)
+		_, p.actorErr = p.client.Get(ctx, "/user", nil, &user)
 		p.actor = user.Login
 	})
 	return p.actor, p.actorErr

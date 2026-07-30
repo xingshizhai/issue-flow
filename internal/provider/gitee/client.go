@@ -19,33 +19,59 @@ import (
 const defaultBaseURL = "https://gitee.com/api/v5"
 
 type Client struct {
-	baseURL string
-	token   string
-	http    *http.Client
+	baseURL    string
+	credential Credential
+	http       *http.Client
 }
 
 func NewClient(token string, timeout time.Duration) *Client {
-	return NewClientWithBaseURL(defaultBaseURL, token, &http.Client{Timeout: timeout})
+	return NewClientWithCredential(defaultBaseURL, NewStaticTokenCredential(token), &http.Client{Timeout: timeout})
 }
 
 func NewClientWithBaseURL(baseURL, token string, httpClient *http.Client) *Client {
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
-		http:    httpClient,
+	if token == "" {
+		return NewClientWithCredential(baseURL, nil, httpClient)
 	}
+	return NewClientWithCredential(baseURL, NewStaticTokenCredential(token), httpClient)
+}
+
+func NewClientWithCredential(baseURL string, credential Credential, httpClient *http.Client) *Client {
+	return &Client{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		credential: credential,
+		http:       httpClient,
+	}
+}
+
+func (c *Client) AccessCapabilities() AccessCapabilities {
+	result := AccessCapabilities{Transport: TransportREST, CredentialMode: CredentialNone}
+	if c.credential != nil {
+		result.CredentialMode = c.credential.Mode()
+		result.RefreshableCredential = c.credential.Refreshable()
+	}
+	return result
+}
+
+func (c *Client) Get(ctx context.Context, path string, query url.Values, target any) (*http.Response, error) {
+	return c.Do(ctx, http.MethodGet, path, query, nil, target)
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, target any) (*http.Response, error) {
-	return c.do(ctx, http.MethodGet, path, query, nil, target)
+	return c.Get(ctx, path, query, target)
 }
 
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, target any) (*http.Response, error) {
+func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body, target any) (*http.Response, error) {
 	if query == nil {
 		query = make(url.Values)
+	} else {
+		query = cloneValues(query)
 	}
-	if c.token != "" {
-		query.Set("access_token", c.token)
+	if c.credential != nil {
+		token, err := c.credential.AccessToken(ctx)
+		if err != nil {
+			return nil, err
+		}
+		query.Set("access_token", token)
 	}
 	endpoint := c.baseURL + path
 	if encoded := query.Encode(); encoded != "" {
@@ -87,6 +113,18 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		return response, fmt.Errorf("decode gitee response: %w", err)
 	}
 	return response, nil
+}
+
+func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, target any) (*http.Response, error) {
+	return c.Do(ctx, method, path, query, body, target)
+}
+
+func cloneValues(values url.Values) url.Values {
+	result := make(url.Values, len(values))
+	for key, entries := range values {
+		result[key] = append([]string(nil), entries...)
+	}
+	return result
 }
 
 func mapHTTPError(response *http.Response) error {

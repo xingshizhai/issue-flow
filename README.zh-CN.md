@@ -26,7 +26,7 @@ issue-flow doctor
 
 凭据只能来自环境变量或获准的外部存储，不能进入仓库。架构支持环境变量 Token 访问 REST API、OAuth 与 Token 刷新访问 REST API，以及配置的 Gitee MCP Server。使用 `doctor` 检查能力；未经明确授权不得真实写入。
 
-当前实现支持使用环境变量 Token 的 Gitee REST API。将 `examples/issue-flow.example.yaml` 复制为 `.issue-flow.yaml`，填写 owner 和仓库路径，导出配置指定的 Token 环境变量，然后运行 `issue-flow doctor`。OAuth 和 MCP transport 仍属于后续能力。
+当前配置支持使用环境变量 Token 的 Gitee REST API。将 `examples/issue-flow.example.yaml` 复制为 `.issue-flow.yaml`，填写 owner 和仓库路径，导出配置指定的 Token 环境变量，然后运行 `issue-flow doctor`。Provider 已使用统一访问接口：REST OAuth 具有可刷新外部凭据源边界；MCP 工厂在适配器尚未实现时返回 `UNSUPPORTED_CAPABILITY`。OAuth 和 MCP 目前都不能从项目配置中选择。`doctor` 会报告实际 transport 和凭据模式。
 
 ## Agent 工作流
 

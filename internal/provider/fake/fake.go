@@ -33,6 +33,8 @@ func (s *Store) Capabilities(context.Context) provider.Capabilities {
 		WriteIssues:     true,
 		StrongClaimCAS:  true,
 		IdempotencyKeys: true,
+		AccessTransport: "local",
+		CredentialMode:  "none",
 	}
 }
 
