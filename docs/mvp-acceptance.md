@@ -9,7 +9,7 @@ criterion complete solely because implementation code exists.
 | # | Criterion | Status | Evidence |
 |---:|---|---|---|
 | 1 | `issue-flow init` creates valid configuration in an empty directory | Automated | `TestInitDoctorAndListJSON`, `TestWriteDefaultAndLoad` |
-| 2 | Fake Provider completes `ready → claimed → working → review` | Automated | `TestProgressBlockAndFinishWorkflow` |
+| 2 | Fake Provider completes `ready → claimed → working → review → done` | Automated | `TestProgressBlockAndFinishWorkflow` |
 | 3 | At most one of two concurrent claims succeeds | Automated | `TestConcurrentUpdateHasOneWinner`, `TestClaimRejectsTokenWhenAnotherClaimWinsConvergence` |
 | 4 | A non-holder cannot heartbeat, release, block, or finish | Automated | CLI authorization table in `TestLeaseWorkflowAndAuthorization` and workflow transition coverage |
 | 5 | An expired lease can be reclaimed explicitly | Automated | `TestReclaimExpiredLease` |
@@ -18,9 +18,9 @@ criterion complete solely because implementation code exists.
 | 8 | Provider credentials and stored token hashes do not appear in logs or ordinary command output | Automated | lease-publication, transport-error, Provider-error, and persisted-redaction tests; the one-time plaintext lease token is intentionally returned only by successful claim |
 | 9 | Gitee Provider completes an authorized repository flow | Manually verified | Gitee test repository `beijing-tongwei/test-use`, Issues `IK5A0U` and `IK5A0V`; both completed `ready → claimed → working → review → done`, and explicit `auto_close` synchronized Gitee native state from `意向` to `已完成`, with real REST writes on 2026-07-30 |
 | 10 | Gitee create maps portable type to native enterprise type | Manually verified | Test Issue `IK5AFH` was created by `--type bug` as native `缺陷`, completed through the full flow, and closed as `已验收` on 2026-07-30 |
-| 10 | Codex follows the Skill through a Fake Provider workflow | Ready, not executed | Tracked fixture and integrity test exist; run [`skill-forward-test.md`](skill-forward-test.md) in a genuinely fresh Agent session |
-| 11 | English and Chinese READMEs guide setup and Fake workflow | Automated | `TestReadmesDocumentCompleteFakeWorkflow` |
-| 12 | REST Token, REST OAuth, and MCP share capability/test boundaries | Automated | `Transport`, `Credential`, `OAuthCredentialSource`, access capability tests, and explicit MCP unsupported result |
+| 11 | Codex follows the Skill through a Fake Provider workflow | Ready, not executed | Tracked fixture and integrity test exist; run [`skill-forward-test.md`](skill-forward-test.md) in a genuinely fresh Agent session |
+| 12 | English and Chinese READMEs guide setup and Fake workflow | Automated | `TestReadmesDocumentCompleteFakeWorkflow` |
+| 13 | REST Token, REST OAuth, and MCP share capability/test boundaries | Automated | `Transport`, `Credential`, `OAuthCredentialSource`, access capability tests, and explicit MCP unsupported result |
 
 ## Required checks
 
@@ -36,7 +36,7 @@ repository. Never put credentials or lease tokens in this record.
 
 ## Remaining acceptance action
 
-Criterion 10 is the only criterion not yet executed. It must use a fresh agent
+Criterion 11 is the only criterion not yet executed. It must use a fresh agent
 session that has not inspected the fixture implementation. Record the date,
 agent product/version, result, and a secret-free observation below.
 

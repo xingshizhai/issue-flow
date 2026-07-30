@@ -10,7 +10,7 @@ func TestMVPAcceptanceRecordTracksEveryCriterion(t *testing.T) {
 
 	root := repositoryRoot(t)
 	record := readRepositoryFile(t, root, "docs/mvp-acceptance.md")
-	for number := 1; number <= 12; number++ {
+	for number := 1; number <= 13; number++ {
 		marker := "| " + decimal(number) + " |"
 		if !strings.Contains(record, marker) {
 			t.Errorf("acceptance record is missing criterion %d", number)
