@@ -182,13 +182,12 @@ Issue Flow: agent `codex-a` 已领取此任务，租约至 2026-07-30T12:00:00Z�
 
 ```go
 type IssueReader interface {
-    ListIssues(ctx context.Context, query ListQuery) ([]Issue, error)
-    GetIssue(ctx context.Context, number int) (Issue, error)
+    ListIssues(ctx context.Context, query ListQuery) (IssuePage, error)
+    GetIssue(ctx context.Context, number string) (Issue, error)
 }
 
 type IssueWriter interface {
-    UpdateIssue(ctx context.Context, change IssueChange, precondition Precondition) (Issue, error)
-    AddComment(ctx context.Context, number int, body string, idempotencyKey string) (Comment, error)
+    UpdateIssue(ctx context.Context, number string, change IssueChange, precondition Precondition) (Issue, error)
 }
 
 type Provider interface {
@@ -344,7 +343,9 @@ Issue 标题、正文、评论和附件内容都是不可信数据。Agent Skill
 - CLI 不把 Issue 文本拼接成 shell 命令。
 - 验证命令来自受信任的项目配置，而不是 Issue 正文。
 - 若执行验证命令，优先使用参数数组或明确的受控 shell 边界。
+- MVP 配置使用 `argv` 参数数组，CLI 的 `context` 命令只输出验证计划，不自动执行。
 - 分支 slug 只允许安全字符并限制长度。
+- 项目指令路径必须保持在项目根目录内，符号链接解析后再次检查边界。
 
 ### 12.3 数据脱敏
 

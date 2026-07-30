@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"issue-flow/internal/clock"
 	"issue-flow/internal/config"
+	"issue-flow/internal/projectcontext"
 	"issue-flow/internal/provider"
 	"issue-flow/internal/provider/fake"
 	"issue-flow/internal/provider/gitee"
@@ -15,9 +17,10 @@ import (
 )
 
 type Runtime struct {
-	ConfigPath string
-	Config     config.Config
-	Provider   provider.Provider
+	ConfigPath  string
+	ProjectRoot string
+	Config      config.Config
+	Provider    provider.Provider
 }
 
 func (r *Runtime) Workflow() *workflow.Service {
@@ -51,7 +54,17 @@ func Open(configPath, project string) (*Runtime, error) {
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider.Type)
 	}
-	return &Runtime{ConfigPath: path, Config: cfg, Provider: p}, nil
+	return &Runtime{
+		ConfigPath: path, ProjectRoot: filepath.Dir(path), Config: cfg, Provider: p,
+	}, nil
+}
+
+func (r *Runtime) Context(ctx context.Context, number string) (projectcontext.Context, error) {
+	issue, err := r.Provider.GetIssue(ctx, number)
+	if err != nil {
+		return projectcontext.Context{}, err
+	}
+	return projectcontext.Build(issue, r.Config, r.ProjectRoot)
 }
 
 type DoctorResult struct {

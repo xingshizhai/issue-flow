@@ -287,13 +287,17 @@ project:
 
 validation:
   commands:
-    - go test ./...
+    - argv: ["go", "test", "./..."]
+      timeout: 10m
 
 git:
   branch_pattern: "{type}/issue-{number}-{slug}"
-  allow_commit: true
+  allow_commit: false
   allow_push: false
   allow_pull_request: false
+
+automation:
+  level: patch
 
 security:
   redact_keys:
@@ -304,6 +308,9 @@ security:
 ```
 
 配置规范应支持未来版本迁移。未知字段可提示警告，但不能造成危险的默认行为。
+
+验证命令必须使用参数数组；默认不经 shell 解释。项目指令文件必须是项目根目录内的
+相对路径，解析后的符号链接也不得越过项目根目录。
 
 ## 8. 权限等级
 

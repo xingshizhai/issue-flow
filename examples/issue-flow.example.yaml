@@ -21,6 +21,20 @@ project:
     - AGENTS.md
     - CLAUDE.md
 
+validation:
+  commands:
+    - argv: ["go", "test", "./..."]
+      timeout: 10m
+
+git:
+  branch_pattern: "{type}/issue-{number}-{slug}"
+  allow_commit: false
+  allow_push: false
+  allow_pull_request: false
+
+automation:
+  level: patch
+
 security:
   redact_keys:
     - password

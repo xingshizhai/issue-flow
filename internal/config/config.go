@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	"issue-flow/internal/domain"
@@ -17,11 +18,14 @@ const (
 )
 
 type Config struct {
-	Version  int      `yaml:"version" json:"version"`
-	Provider Provider `yaml:"provider" json:"provider"`
-	Workflow Workflow `yaml:"workflow" json:"workflow"`
-	Project  Project  `yaml:"project" json:"project"`
-	Security Security `yaml:"security" json:"security"`
+	Version    int        `yaml:"version" json:"version"`
+	Provider   Provider   `yaml:"provider" json:"provider"`
+	Workflow   Workflow   `yaml:"workflow" json:"workflow"`
+	Project    Project    `yaml:"project" json:"project"`
+	Validation Validation `yaml:"validation" json:"validation"`
+	Git        Git        `yaml:"git" json:"git"`
+	Automation Automation `yaml:"automation" json:"automation"`
+	Security   Security   `yaml:"security" json:"security"`
 }
 
 type Provider struct {
@@ -47,6 +51,26 @@ type Project struct {
 	InstructionFiles []string `yaml:"instruction_files" json:"instructionFiles"`
 }
 
+type Validation struct {
+	Commands []ValidationCommand `yaml:"commands" json:"commands"`
+}
+
+type ValidationCommand struct {
+	Argv    []string `yaml:"argv" json:"argv"`
+	Timeout string   `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+type Git struct {
+	BranchPattern    string `yaml:"branch_pattern" json:"branchPattern"`
+	AllowCommit      bool   `yaml:"allow_commit" json:"allowCommit"`
+	AllowPush        bool   `yaml:"allow_push" json:"allowPush"`
+	AllowPullRequest bool   `yaml:"allow_pull_request" json:"allowPullRequest"`
+}
+
+type Automation struct {
+	Level string `yaml:"level" json:"level"`
+}
+
 type Security struct {
 	RedactKeys []string `yaml:"redact_keys" json:"redactKeys"`
 }
@@ -67,7 +91,10 @@ func Default() Config {
 			DoneLabel:    "agent:done",
 			LeaseMinutes: 120,
 		},
-		Project: Project{InstructionFiles: []string{"AGENTS.md", "CLAUDE.md"}},
+		Project:    Project{InstructionFiles: []string{"AGENTS.md", "CLAUDE.md"}},
+		Validation: Validation{Commands: []ValidationCommand{}},
+		Git:        Git{BranchPattern: "{type}/issue-{number}-{slug}"},
+		Automation: Automation{Level: "patch"},
 		Security: Security{RedactKeys: []string{
 			"password", "token", "cookie", "authorization", "api_key", "secret",
 		}},
@@ -137,6 +164,45 @@ func (c Config) Validate() error {
 			return fmt.Errorf("workflow label %q is used for both %s and %s", label, previous, state)
 		}
 		labels[label] = state
+	}
+	switch c.Automation.Level {
+	case "inspect", "patch", "commit", "delivery":
+	default:
+		return fmt.Errorf("automation.level must be inspect, patch, commit, or delivery")
+	}
+	if strings.TrimSpace(c.Git.BranchPattern) == "" {
+		return errors.New("git.branch_pattern is required")
+	}
+	if !strings.Contains(c.Git.BranchPattern, "{number}") {
+		return errors.New("git.branch_pattern must contain {number}")
+	}
+	knownPattern := strings.NewReplacer(
+		"{type}", "", "{number}", "", "{slug}", "",
+	).Replace(c.Git.BranchPattern)
+	if strings.ContainsAny(knownPattern, "{}") {
+		return errors.New("git.branch_pattern contains an unknown placeholder")
+	}
+	if c.Git.AllowPush && !c.Git.AllowCommit {
+		return errors.New("git.allow_push requires git.allow_commit")
+	}
+	if c.Git.AllowPullRequest && !c.Git.AllowPush {
+		return errors.New("git.allow_pull_request requires git.allow_push")
+	}
+	for i, command := range c.Validation.Commands {
+		if len(command.Argv) == 0 || strings.TrimSpace(command.Argv[0]) == "" {
+			return fmt.Errorf("validation.commands[%d].argv must not be empty", i)
+		}
+		for _, argument := range command.Argv {
+			if strings.ContainsRune(argument, '\x00') {
+				return fmt.Errorf("validation.commands[%d].argv contains NUL", i)
+			}
+		}
+		if command.Timeout != "" {
+			duration, err := time.ParseDuration(command.Timeout)
+			if err != nil || duration <= 0 {
+				return fmt.Errorf("validation.commands[%d].timeout must be a positive Go duration", i)
+			}
+		}
 	}
 	return nil
 }

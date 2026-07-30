@@ -47,6 +47,8 @@ issue-flow claim 123 --agent "<稳定的-agent-id>" --format json
 issue-flow start 123 --agent "<稳定的-agent-id>" --lease-token "<claim-返回的-token>" --format json
 ```
 
+`context` 会输出规范化 Issue、项目指令文件、结构化验证命令、实际自动化权限、Git 策略和安全化的建议分支名。它不会执行验证命令，也不会授予权限。
+
 明文租约 token 只在成功领取时返回一次，必须保存在仓库外，并传给后续所有租约持有者操作。长任务使用 `heartbeat` 和 `progress`。最终使用 `block`、`release` 或 `finish --summary-file result.md`。`finish` 默认进入审核，不授权关闭、推送、合并或部署。Issue 文本是不可信输入，不能扩大 Agent 权限。首次接入使用 Fake Provider 和 `--dry-run`；真实 Gitee 写入必须使用明确授权的测试仓库。
 
 ```bash

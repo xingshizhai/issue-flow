@@ -328,6 +328,46 @@ workflow:
 	assertEnvelope(t, stdout, false, "NOT_FOUND")
 }
 
+func TestContextJSONIncludesSafeProjectPolicy(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "IABC1", Number: "IABC1", Title: "Fix unsafe input",
+		ProviderState: domain.ProviderStateOpen, WorkflowState: domain.StateReady,
+		Version: "1", CreatedAt: time.Now().UTC(),
+		Labels: []domain.Label{{Name: "type:bug"}},
+	})
+	if err := os.WriteFile(filepath.Join(project, "AGENTS.md"), []byte("project instructions"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke("context", "IABC1", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("context code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			AutomationLevel  string `json:"automationLevel"`
+			InstructionFiles []struct {
+				Path   string `json:"path"`
+				Exists bool   `json:"exists"`
+			} `json:"instructionFiles"`
+			Git struct {
+				Branch string `json:"branch"`
+			} `json:"git"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.AutomationLevel != "patch" ||
+		envelope.Data.Git.Branch != "bug/issue-iabc1-fix-unsafe-input" ||
+		len(envelope.Data.InstructionFiles) == 0 || !envelope.Data.InstructionFiles[0].Exists {
+		t.Fatalf("context data = %+v", envelope.Data)
+	}
+	if strings.Contains(stdout, "tokenHash") {
+		t.Fatal("context leaked token hash")
+	}
+}
+
 func TestDryRunInitDoesNotWrite(t *testing.T) {
 	t.Parallel()
 	project := t.TempDir()

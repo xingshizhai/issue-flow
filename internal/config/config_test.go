@@ -64,3 +64,22 @@ func TestFindWalksParents(t *testing.T) {
 		t.Fatalf("Find() = %q, want %q", found, configPath)
 	}
 }
+
+func TestValidateStructuredCommandsAndGitPolicy(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Validation.Commands = []ValidationCommand{{Argv: []string{"go", "test"}, Timeout: "invalid"}}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "positive Go duration") {
+		t.Fatalf("invalid timeout error = %v", err)
+	}
+	cfg = Default()
+	cfg.Git.AllowPush = true
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "requires git.allow_commit") {
+		t.Fatalf("unsafe git policy error = %v", err)
+	}
+	cfg = Default()
+	cfg.Git.BranchPattern = "{unknown}/{number}"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "unknown placeholder") {
+		t.Fatalf("unknown placeholder error = %v", err)
+	}
+}

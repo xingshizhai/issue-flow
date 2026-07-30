@@ -63,11 +63,60 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.list(ctx, g, args[1:])
 	case "show":
 		return c.show(ctx, g, args[1:])
+	case "context":
+		return c.context(ctx, g, args[1:])
 	case "claim", "start", "heartbeat", "progress", "block", "release", "reclaim", "finish":
 		return c.leaseCommand(ctx, g, args[0], args[1:])
 	default:
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("unknown command %q", args[0]), 2)
 	}
+}
+
+func (c *cli) context(ctx context.Context, g globals, args []string) int {
+	if len(args) != 1 || !validIssueReference(args[0]) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("context requires one valid issue number"), 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	result, err := runtime.Context(ctx, args[0])
+	if err != nil {
+		if errors.Is(err, provider.ErrNotFound) {
+			return c.providerFailure(g.format, err)
+		}
+		return c.fail(g.format, "CONFIG_ERROR", err, 2)
+	}
+	if g.format == "json" {
+		return c.success(g.format, result, "")
+	}
+	fmt.Fprintf(c.stdout, "# Issue #%s: %s\n\n", result.Issue.Number, result.Issue.Title)
+	fmt.Fprintf(c.stdout, "State: %s\nAutomation: %s\nBranch: %s\n\n",
+		result.Issue.WorkflowState, result.AutomationLevel, result.Git.Branch)
+	fmt.Fprintln(c.stdout, "## Description")
+	fmt.Fprintln(c.stdout, result.Issue.Body)
+	fmt.Fprintln(c.stdout, "\n## Project instructions")
+	for _, instruction := range result.InstructionFiles {
+		status := "missing"
+		if instruction.Exists {
+			status = "present"
+		}
+		fmt.Fprintf(c.stdout, "- %s (%s)\n", instruction.Path, status)
+	}
+	fmt.Fprintln(c.stdout, "\n## Validation")
+	if len(result.Validation) == 0 {
+		fmt.Fprintln(c.stdout, "- none configured")
+	}
+	for _, command := range result.Validation {
+		fmt.Fprintf(c.stdout, "- argv: %q", command.Argv)
+		if command.Timeout != "" {
+			fmt.Fprintf(c.stdout, " (timeout %s)", command.Timeout)
+		}
+		fmt.Fprintln(c.stdout)
+	}
+	fmt.Fprintf(c.stdout, "\n## Git policy\n- commit: %t\n- push: %t\n- pull request: %t\n",
+		result.Git.AllowCommit, result.Git.AllowPush, result.Git.AllowPullRequest)
+	return 0
 }
 
 func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args []string) int {
@@ -386,6 +435,7 @@ Commands:
   doctor     Validate configuration and inspect provider capabilities
   list       List issues
   show       Show one issue
+  context    Build normalized agent context
   claim      Claim a ready issue
   start      Move a claimed issue to working
   heartbeat  Renew a held lease
