@@ -31,7 +31,16 @@ func TestGiteeE2E(t *testing.T) {
 
 	client := NewClient(token, 30*time.Second)
 	cfg := config.Default()
-	ensureWorkflowLabels(t, ctx, client, owner, repo, cfg.Workflow)
+	if os.Getenv("GITEE_E2E_USE_EXISTING_LABELS") == "1" {
+		cfg.Workflow.ReadyLabel = "bug"
+		cfg.Workflow.ClaimedLabel = "duplicate"
+		cfg.Workflow.WorkingLabel = "enhancement"
+		cfg.Workflow.BlockedLabel = "feature"
+		cfg.Workflow.ReviewLabel = "invalid"
+		cfg.Workflow.DoneLabel = "question"
+	} else {
+		ensureWorkflowLabels(t, ctx, client, owner, repo, cfg.Workflow)
+	}
 	created := createTestIssue(t, ctx, client, owner, repo, cfg.Workflow.ReadyLabel)
 	if created.Number == "" {
 		t.Fatal("Gitee returned an empty issue number")

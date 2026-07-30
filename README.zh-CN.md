@@ -52,3 +52,4 @@ issue-flow start 123 --agent "<稳定的-agent-id>" --lease-token "<claim-返回
 所有环境共享同一 CLI 和 JSON 契约，平台 Skill/Rule 保持轻薄。参阅[需求规格](docs/requirements.md)和[技术方案](docs/architecture.md)。
 
 真实 Gitee 测试默认跳过。只有同时显式设置 `ISSUE_FLOW_GITEE_E2E=1`、`GITEE_TOKEN`、`GITEE_OWNER` 和 `GITEE_REPO` 时才会运行，并会在获准的测试仓库中创建一个 Issue。
+测试通常会确保六个工作流标签存在，这一步在企业仓库中可能需要企业管理员权限。`GITEE_E2E_USE_EXISTING_LABELS=1` 只用于隔离的测试仓库，会临时映射六个标准标签，不能作为生产工作流配置。

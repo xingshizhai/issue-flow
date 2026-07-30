@@ -52,3 +52,4 @@ The plaintext lease token is returned only by a successful claim. Keep it outsid
 All environments share the same CLI and JSON contract; platform Skills/Rules remain thin. See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.
+The test normally ensures the six configured workflow labels exist, which can require enterprise administrator permission. `GITEE_E2E_USE_EXISTING_LABELS=1` is available only for an isolated test repository and temporarily maps six standard labels; it must not be used as a production workflow configuration.
