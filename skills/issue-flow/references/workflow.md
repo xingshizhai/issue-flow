@@ -2,6 +2,17 @@
 
 Use JSON output for automation and verify `ok` before consuming `data`. Preserve the CLI exit code and structured error code when reporting failures.
 
+Every write response includes an operation ID. When a write returns a retryable
+error, repeat the exact same command and agent with
+`--operation-id "<original-operationId>"`. Never reuse an operation ID for a
+different command or agent. Completed non-claim operations return their existing
+result without another Provider write.
+
+A claim token is intentionally returned only once. Replaying an applied claim
+with the same operation ID returns `LEASE_CONFLICT`, not the token. If the
+successful claim response was lost, inspect the Issue and wait for explicit
+reclaim rather than guessing or issuing another claim.
+
 ## Discover and inspect
 
 ```bash

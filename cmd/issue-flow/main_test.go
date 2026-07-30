@@ -70,6 +70,45 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestWriteCommandAcceptsValidatedOperationID(t *testing.T) {
+	t.Parallel()
+
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "operation", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke(
+		"claim", "1", "--agent", "agent-a", "--operation-id", "op_external.123",
+		"--dry-run", "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		OperationID string `json:"operationId"`
+		Data        struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.OperationID != "op_external.123" ||
+		len(envelope.Data.Issue.Events) != 1 ||
+		envelope.Data.Issue.Events[0].OperationID != "op_external.123" {
+		t.Fatalf("envelope = %+v", envelope)
+	}
+
+	code, stdout, stderr = invoke(
+		"claim", "1", "--agent", "agent-a", "--operation-id", "unsafe id",
+		"--dry-run", "--project", project, "--json",
+	)
+	if code != 2 || stderr != "" {
+		t.Fatalf("invalid ID code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
 func TestProviderErrorMappingAndRetryability(t *testing.T) {
 	t.Parallel()
 

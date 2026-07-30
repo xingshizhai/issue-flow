@@ -136,6 +136,7 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	reason := flags.String("reason", "", "release or block reason")
 	message := flags.String("message", "", "progress message")
 	summaryFile := flags.String("summary-file", "", "path to a finish summary")
+	requestedOperationID := flags.String("operation-id", "", "stable operation ID for retry correlation")
 	if err := flags.Parse(args[1:]); err != nil {
 		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
 	}
@@ -148,11 +149,17 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	if command != "claim" && command != "reclaim" && *leaseToken == "" {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--lease-token is required"), 2)
 	}
+	if *requestedOperationID != "" && !validOperationID(*requestedOperationID) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--operation-id must start with op_ and contain 1 to 64 safe characters"), 2)
+	}
 	runtime, code := c.open(g)
 	if runtime == nil {
 		return code
 	}
 	opID := operationID()
+	if *requestedOperationID != "" {
+		opID = *requestedOperationID
+	}
 	service := runtime.Workflow()
 	var result workflow.Result
 	var err error
@@ -542,4 +549,18 @@ func operationID() string {
 		return "op_unknown"
 	}
 	return "op_" + hex.EncodeToString(value[:])
+}
+
+func validOperationID(value string) bool {
+	if !strings.HasPrefix(value, "op_") || len(value) < 4 || len(value) > 67 {
+		return false
+	}
+	for _, r := range value[3:] {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }

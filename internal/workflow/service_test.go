@@ -68,3 +68,77 @@ func TestClaimRejectsTokenWhenAnotherClaimWinsConvergence(t *testing.T) {
 		t.Fatalf("losing claim returned lease token %q", result.LeaseToken)
 	}
 }
+
+func TestCompletedOperationCanBeReplayedWithoutAnotherWrite(t *testing.T) {
+	t.Parallel()
+
+	completed := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateWorking,
+		Events: []domain.WorkflowEvent{{
+			Version: 1, OperationID: "op_start_retry", Operation: "start",
+			AgentID: "agent-a", From: domain.StateClaimed, To: domain.StateWorking,
+		}},
+	}
+	service := New(
+		claimRaceProvider{ready: completed, winner: domain.Issue{}},
+		clock.Fixed{Time: time.Now().UTC()},
+		time.Hour,
+	)
+	result, err := service.Start(
+		context.Background(), "1", "agent-a", "no-longer-needed",
+		"op_start_retry", false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Issue.WorkflowState != domain.StateWorking {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestOperationIDCollisionIsRejected(t *testing.T) {
+	t.Parallel()
+
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateWorking,
+		Events: []domain.WorkflowEvent{{
+			Version: 1, OperationID: "op_collision", Operation: "start",
+			AgentID: "agent-a",
+		}},
+	}
+	service := New(
+		claimRaceProvider{ready: current},
+		clock.Fixed{Time: time.Now().UTC()},
+		time.Hour,
+	)
+	_, err := service.Heartbeat(
+		context.Background(), "1", "agent-a", "unused",
+		"op_collision", false,
+	)
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAppliedClaimCannotReturnOneTimeTokenAgain(t *testing.T) {
+	t.Parallel()
+
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateClaimed,
+		Events: []domain.WorkflowEvent{{
+			Version: 1, OperationID: "op_claim_retry", Operation: "claim",
+			AgentID: "agent-a",
+		}},
+	}
+	service := New(
+		claimRaceProvider{ready: current},
+		clock.Fixed{Time: time.Now().UTC()},
+		time.Hour,
+	)
+	result, err := service.Claim(
+		context.Background(), "1", "agent-a", "op_claim_retry", false,
+	)
+	if !errors.Is(err, ErrLeaseConflict) || result.LeaseToken != "" {
+		t.Fatalf("result = %+v, error = %v", result, err)
+	}
+}

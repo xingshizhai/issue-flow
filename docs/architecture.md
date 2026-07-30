@@ -341,6 +341,14 @@ Workflow 在 claim 写入后的重读结果上再次验证 lease ID、agent ID �
 - 不对认证失败、状态冲突和输入错误自动重试。
 - HTTP 客户端必须设置连接和总请求超时。
 
+写命令接受可选 `--operation-id`，仅允许 `op_` 前缀和有限安全字符。默认仍自动
+生成。可重试错误后，调用方使用响应中的原 ID 重放完全相同的命令；Workflow
+在鉴权和状态转换前识别已完成的同命令、同 Agent 事件并返回现状，不再次写
+Provider。跨命令或跨 Agent 的 ID 冲突返回 `INVALID_ARGUMENT`。
+
+claim 是例外：明文租约 token 只返回一次。已落盘 claim 的重放返回
+`LEASE_CONFLICT`，不能恢复 token；调用方不得通过新 claim 猜测所有权。
+
 当前 Gitee REST Client 只在 HTTP 层自动重试 GET：临时网络错误、429 和
 5xx 最多尝试三次，遵守有限的 `Retry-After` 并使用指数退避。POST/PUT 等写请求
 不在 HTTP 层盲目重试，避免重复评论或标签写入；写流程依靠 operation ID 和写前

@@ -55,6 +55,12 @@ func (s *Service) Claim(ctx context.Context, number, agentID, operationID string
 	if err != nil {
 		return Result{}, err
 	}
+	if event, found := findOperation(current, operationID); found {
+		if event.Operation != "claim" || event.AgentID != agentID {
+			return Result{}, fmt.Errorf("%w: operation ID is already used", ErrInvalidInput)
+		}
+		return Result{}, fmt.Errorf("%w: claim already applied; its one-time token cannot be returned again", ErrLeaseConflict)
+	}
 	now := s.clock.Now()
 	if current.WorkflowState != domain.StateReady {
 		return Result{}, fmt.Errorf("%w: issue is %s", ErrStateConflict, current.WorkflowState)
@@ -111,7 +117,14 @@ func (s *Service) Progress(ctx context.Context, number, agentID, token, operatio
 	if strings.TrimSpace(message) == "" {
 		return Result{}, fmt.Errorf("%w: progress message is required", ErrInvalidInput)
 	}
-	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
+	current, err := s.provider.GetIssue(ctx, number)
+	if err != nil {
+		return Result{}, err
+	}
+	if result, found, err := replayOperation(current, operationID, "progress", agentID); found || err != nil {
+		return result, err
+	}
+	now, err := s.authorizeLoaded(current, agentID, token)
 	if err != nil {
 		return Result{}, err
 	}
@@ -148,7 +161,14 @@ func (s *Service) Finish(ctx context.Context, number, agentID, token, operationI
 }
 
 func (s *Service) Heartbeat(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
-	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
+	current, err := s.provider.GetIssue(ctx, number)
+	if err != nil {
+		return Result{}, err
+	}
+	if result, found, err := replayOperation(current, operationID, "heartbeat", agentID); found || err != nil {
+		return result, err
+	}
+	now, err := s.authorizeLoaded(current, agentID, token)
 	if err != nil {
 		return Result{}, err
 	}
@@ -172,6 +192,9 @@ func (s *Service) Reclaim(ctx context.Context, number, operationID string, dryRu
 	current, err := s.provider.GetIssue(ctx, number)
 	if err != nil {
 		return Result{}, err
+	}
+	if result, found, err := replayOperation(current, operationID, "reclaim", ""); found || err != nil {
+		return result, err
 	}
 	now := s.clock.Now()
 	if current.Lease == nil {
@@ -203,7 +226,14 @@ func (s *Service) holderTransition(
 	ctx context.Context, number, agentID, token, operationID, operation string,
 	next domain.WorkflowState, message string, clearLease, dryRun bool,
 ) (Result, error) {
-	current, now, err := s.authorizedIssue(ctx, number, agentID, token)
+	current, err := s.provider.GetIssue(ctx, number)
+	if err != nil {
+		return Result{}, err
+	}
+	if result, found, err := replayOperation(current, operationID, operation, agentID); found || err != nil {
+		return result, err
+	}
+	now, err := s.authorizeLoaded(current, agentID, token)
 	if err != nil {
 		return Result{}, err
 	}
@@ -227,28 +257,47 @@ func (s *Service) holderTransition(
 	}, dryRun)
 }
 
-func (s *Service) authorizedIssue(ctx context.Context, number, agentID, token string) (domain.Issue, time.Time, error) {
+func (s *Service) authorizeLoaded(current domain.Issue, agentID, token string) (time.Time, error) {
 	if err := validateAgentID(agentID); err != nil {
-		return domain.Issue{}, time.Time{}, err
+		return time.Time{}, err
 	}
 	if token == "" {
-		return domain.Issue{}, time.Time{}, fmt.Errorf("%w: lease token is required", ErrInvalidInput)
-	}
-	current, err := s.provider.GetIssue(ctx, number)
-	if err != nil {
-		return domain.Issue{}, time.Time{}, err
+		return time.Time{}, fmt.Errorf("%w: lease token is required", ErrInvalidInput)
 	}
 	now := s.clock.Now()
 	if current.Lease == nil || !current.Lease.Authenticates(agentID, token) {
-		return domain.Issue{}, time.Time{}, fmt.Errorf("%w: caller does not hold this lease", ErrLeaseConflict)
+		return time.Time{}, fmt.Errorf("%w: caller does not hold this lease", ErrLeaseConflict)
 	}
 	if !current.Lease.ValidAt(now) {
-		return domain.Issue{}, time.Time{}, ErrLeaseExpired
+		return time.Time{}, ErrLeaseExpired
 	}
-	return current, now, nil
+	return now, nil
+}
+
+func replayOperation(issue domain.Issue, operationID, operation, agentID string) (Result, bool, error) {
+	event, found := findOperation(issue, operationID)
+	if !found {
+		return Result{}, false, nil
+	}
+	if event.Operation != operation || event.AgentID != agentID {
+		return Result{}, true, fmt.Errorf("%w: operation ID is already used", ErrInvalidInput)
+	}
+	return Result{Issue: issue}, true, nil
+}
+
+func findOperation(issue domain.Issue, operationID string) (domain.WorkflowEvent, bool) {
+	for _, event := range issue.Events {
+		if event.OperationID == operationID {
+			return event, true
+		}
+	}
+	return domain.WorkflowEvent{}, false
 }
 
 func (s *Service) apply(ctx context.Context, current domain.Issue, change provider.IssueChange, precondition provider.Precondition, dryRun bool) (Result, error) {
+	if !validOperationID(change.Event.OperationID) {
+		return Result{}, fmt.Errorf("%w: operation ID must start with op_ and contain 1 to 64 safe characters", ErrInvalidInput)
+	}
 	if dryRun {
 		if change.WorkflowState != nil {
 			current.WorkflowState = *change.WorkflowState
@@ -270,6 +319,20 @@ func (s *Service) apply(ctx context.Context, current domain.Issue, change provid
 		return Result{}, err
 	}
 	return Result{Issue: updated}, nil
+}
+
+func validOperationID(value string) bool {
+	if !strings.HasPrefix(value, "op_") || len(value) < 4 || len(value) > 67 {
+		return false
+	}
+	for _, r := range value[3:] {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func validateAgentID(agentID string) error {
