@@ -6,6 +6,8 @@ Issue Flow gives coding agents a deterministic workflow for automatically handli
 
 > Status: Phase 1 MVP implementation. Build from a trusted checkout and validate the configuration before automation.
 
+Run `make check` before submitting changes. It checks formatting, unit and integration tests, the race detector, and `go vet`; GitHub CI repeats these checks and builds on Linux, macOS, and Windows.
+
 ## Install
 
 Build from a trusted checkout until a Go module path and releases are published:
