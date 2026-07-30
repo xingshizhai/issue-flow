@@ -151,6 +151,9 @@ func (c Config) Validate() error {
 		if c.Provider.Owner == "" || c.Provider.Repo == "" || c.Provider.TokenEnv == "" {
 			return errors.New("provider owner, repo, and token_env are required for gitee")
 		}
+		if !validGiteeTokenEnv(c.Provider.TokenEnv) {
+			return errors.New("provider.token_env must be an uppercase GITEE_*TOKEN* environment variable")
+		}
 	default:
 		return fmt.Errorf("unsupported provider type %q", c.Provider.Type)
 	}
@@ -211,6 +214,20 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func validGiteeTokenEnv(value string) bool {
+	if !strings.HasPrefix(value, "GITEE_") || !strings.Contains(value, "TOKEN") {
+		return false
+	}
+	for index, r := range value {
+		if (r >= 'A' && r <= 'Z') || r == '_' ||
+			(index > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func Load(path string) (Config, error) {

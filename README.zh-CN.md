@@ -32,6 +32,8 @@ issue-flow doctor
 
 配置必须是不超过 1 MiB 的普通文件，不能是符号链接。`init` 会原子创建配置，并拒绝任何已存在路径，包括悬空符号链接。
 
+使用 Gitee REST Token 时，`provider.token_env` 必须是大写的 `GITEE_*TOKEN*` 名称，例如 `GITEE_TOKEN`。仓库配置不能把凭据读取重定向到 `PATH`、云密钥或其他 Provider Token 等无关环境变量。
+
 当前配置支持使用环境变量 Token 的 Gitee REST API。将 `examples/issue-flow.example.yaml` 复制为 `.issue-flow.yaml`，填写 owner 和仓库路径，导出配置指定的 Token 环境变量，然后运行 `issue-flow doctor`。该只读检查会验证账号、仓库和配置的六个工作流标签；缺少标签时返回带标签名的 `CONFIG_ERROR`，不会自动创建。Provider 已使用统一访问接口：REST OAuth 具有可刷新外部凭据源边界；MCP 工厂在适配器尚未实现时返回 `UNSUPPORTED_CAPABILITY`。OAuth 和 MCP 目前都不能从项目配置中选择。`doctor` 会报告实际 transport 和凭据模式。
 
 ## Agent 工作流

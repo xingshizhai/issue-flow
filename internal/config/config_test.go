@@ -140,3 +140,33 @@ func TestWriteDefaultRefusesDanglingSymlink(t *testing.T) {
 		t.Fatalf("dangling symlink target was created: %v", err)
 	}
 }
+
+func TestValidateRestrictsGiteeCredentialEnvironment(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{
+		"PATH", "HOME", "AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN",
+		"gitee_token", "GITEE_CREDENTIAL",
+	} {
+		cfg := Default()
+		cfg.Provider.Type = "gitee"
+		cfg.Provider.Owner = "owner"
+		cfg.Provider.Repo = "repo"
+		cfg.Provider.TokenEnv = name
+		if err := cfg.Validate(); err == nil ||
+			!strings.Contains(err.Error(), "GITEE_*TOKEN*") {
+			t.Errorf("token_env %q error = %v", name, err)
+		}
+	}
+
+	for _, name := range []string{"GITEE_TOKEN", "GITEE_API_TOKEN", "GITEE_OAUTH_ACCESS_TOKEN"} {
+		cfg := Default()
+		cfg.Provider.Type = "gitee"
+		cfg.Provider.Owner = "owner"
+		cfg.Provider.Repo = "repo"
+		cfg.Provider.TokenEnv = name
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("token_env %q error = %v", name, err)
+		}
+	}
+}

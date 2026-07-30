@@ -32,6 +32,8 @@ Credentials must come from environment variables or approved external storage, n
 
 The configuration must be a regular, non-symlink file no larger than 1 MiB. `init` creates it atomically and refuses every existing path, including dangling symlinks.
 
+For Gitee REST Token mode, `provider.token_env` must be an uppercase `GITEE_*TOKEN*` name such as `GITEE_TOKEN`. Repository configuration cannot redirect credential loading to unrelated variables such as `PATH`, cloud credentials, or another Provider's token.
+
 The current configuration supports the Gitee REST API with an environment token. Copy `examples/issue-flow.example.yaml` to `.issue-flow.yaml`, set the owner and repository path, export the configured token variable, and run `issue-flow doctor`. The read-only check verifies the account, repository, and all six configured workflow labels; it reports `CONFIG_ERROR` with missing label names and never creates them. The Provider uses a shared access interface: REST OAuth has a refreshable external credential-source boundary, while the MCP factory returns `UNSUPPORTED_CAPABILITY` until its adapter is implemented. Neither OAuth nor MCP can currently be selected in project configuration. `doctor` reports the active transport and credential mode.
 
 ## Agent workflow
