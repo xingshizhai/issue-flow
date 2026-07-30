@@ -191,6 +191,46 @@ func TestUpdateRejectsInvalidChangeBeforeNetworkAccess(t *testing.T) {
 	}
 }
 
+func TestSyncNativeStateClosesOnlyOptedInDoneIssues(t *testing.T) {
+	t.Parallel()
+	var requests int
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Method != http.MethodPatch || r.URL.Path != "/repos/owner/issues/IABC1" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["repo"] != "repo" || body["state"] != "closed" {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(issueJSON("IABC1", "agent:done")))
+	})
+	p := testProvider(handler)
+	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateDone); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 0 {
+		t.Fatalf("auto_close=false performed %d requests", requests)
+	}
+	p.workflow.AutoClose = true
+	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateReview); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 0 {
+		t.Fatalf("review performed %d requests", requests)
+	}
+	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateDone); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 1 {
+		t.Fatalf("done performed %d requests", requests)
+	}
+}
+
 func TestGetIssueAcceptsEventsOnlyFromTokenOwner(t *testing.T) {
 	t.Parallel()
 	lease := domain.Lease{

@@ -101,7 +101,9 @@ After a human review, record the reviewer and conclusion explicitly:
 issue-flow complete 123 --reviewer "<stable-reviewer-id>" --conclusion-file review.md
 ```
 
-`complete` moves `review` to `done`; it does not close the provider Issue.
+`complete` moves `review` to `done`. By default it does not close the provider
+Issue; when `workflow.auto_close` is explicitly enabled, the Gitee Provider also
+synchronizes the native Issue state to `closed`.
 
 ## Fake Provider walkthrough
 

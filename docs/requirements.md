@@ -203,8 +203,8 @@ issue-flow complete 123 --reviewer reviewer-id --conclusion-file review.md
 - 风险和后续工作。
 
 默认目标状态为 `review`。只有配置明确允许且调用方显式传参时，才能关闭 Issue。
-人工审核通过后，`complete` 记录审核人和结论并将状态推进到 `done`；
-该状态转换本身不关闭 Provider Issue。
+人工审核通过后，`complete` 记录审核人和结论并将状态推进到 `done`。仅当
+`workflow.auto_close` 显式启用时，Provider 才同步关闭原生 Issue。
 
 ### FR-08 Dry-run
 

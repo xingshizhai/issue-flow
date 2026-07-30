@@ -171,8 +171,19 @@ func (s *Service) Complete(ctx context.Context, number, reviewerID, operationID,
 	if err != nil {
 		return Result{}, err
 	}
-	if result, found, err := replayOperation(current, operationID, "complete", reviewerID); found || err != nil {
-		return result, err
+	if event, found := findOperation(current, operationID); found {
+		if event.Operation != "complete" || event.AgentID != reviewerID {
+			return Result{}, fmt.Errorf("%w: operation ID is already used", ErrInvalidInput)
+		}
+		if dryRun {
+			return Result{Issue: current, DryRun: true}, nil
+		}
+		next := domain.StateDone
+		return s.apply(ctx, current, provider.IssueChange{
+			WorkflowState: &next, Event: event,
+		}, provider.Precondition{
+			Version: current.Version, WorkflowState: current.WorkflowState,
+		}, false)
 	}
 	if err := domain.ValidateTransition(current.WorkflowState, domain.StateDone); err != nil {
 		return Result{}, fmt.Errorf("%w: %v", ErrStateConflict, err)

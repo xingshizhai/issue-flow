@@ -177,11 +177,21 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 					provider.ErrPreconditionFailed,
 				)
 			}
+			changed := false
 			if change.WorkflowState != nil && !p.hasWorkflowLabel(current.Labels, *change.WorkflowState) {
 				labels := p.replaceWorkflowLabel(current.Labels, *change.WorkflowState)
 				if _, err := p.client.Do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
 					return domain.Issue{}, fmt.Errorf("resume label update: %w", err)
 				}
+				changed = true
+			}
+			if change.WorkflowState != nil && p.nativeStateNeedsSync(current, *change.WorkflowState) {
+				if err := p.syncNativeState(ctx, number, *change.WorkflowState); err != nil {
+					return domain.Issue{}, fmt.Errorf("resume native state update: %w", err)
+				}
+				changed = true
+			}
+			if changed {
 				return p.GetIssue(ctx, number)
 			}
 			return current, nil
@@ -210,8 +220,27 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 		if _, err := p.client.Do(ctx, http.MethodPut, p.repoPath("/issues/"+url.PathEscape(number)+"/labels"), nil, labels, &[]labelDTO{}); err != nil {
 			return domain.Issue{}, fmt.Errorf("event written but label update failed: %w", err)
 		}
+		if err := p.syncNativeState(ctx, number, *change.WorkflowState); err != nil {
+			return domain.Issue{}, fmt.Errorf("event and label written but native state update failed: %w", err)
+		}
 	}
 	return p.GetIssue(ctx, number)
+}
+
+func (p *Provider) nativeStateNeedsSync(issue domain.Issue, state domain.WorkflowState) bool {
+	return p.workflow.AutoClose && state == domain.StateDone &&
+		issue.ProviderState != domain.ProviderStateClosed
+}
+
+func (p *Provider) syncNativeState(ctx context.Context, number string, state domain.WorkflowState) error {
+	if !p.workflow.AutoClose || state != domain.StateDone {
+		return nil
+	}
+	var updated issueDTO
+	_, err := p.client.Do(ctx, http.MethodPatch,
+		"/repos/"+url.PathEscape(p.owner)+"/issues/"+url.PathEscape(number), nil,
+		map[string]string{"repo": p.repo, "state": "closed"}, &updated)
+	return err
 }
 
 func (p *Provider) hasWorkflowLabel(labels []domain.Label, state domain.WorkflowState) bool {

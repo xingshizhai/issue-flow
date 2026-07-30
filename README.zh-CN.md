@@ -101,7 +101,8 @@ issue-flow finish 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --s
 issue-flow complete 123 --reviewer "<稳定的审核人ID>" --conclusion-file review.md
 ```
 
-`complete` 只把 `review` 推进到 `done`，不会关闭 Provider 上的 Issue。
+`complete` 把 `review` 推进到 `done`。默认不会关闭 Provider Issue；显式启用
+`workflow.auto_close` 后，Gitee Provider 还会把原生 Issue 状态同步为 `closed`。
 
 ## Fake Provider 完整演练
 

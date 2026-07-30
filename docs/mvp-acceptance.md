@@ -16,7 +16,7 @@ criterion complete solely because implementation code exists.
 | 6 | Every write command supports dry-run | Automated | CLI dry-run integration coverage and workflow dry-run tests |
 | 7 | Main commands support JSON and stable exit codes | Automated | CLI envelope, command, Provider mapping, and retryability tests |
 | 8 | Provider credentials and stored token hashes do not appear in logs or ordinary command output | Automated | lease-publication, transport-error, Provider-error, and persisted-redaction tests; the one-time plaintext lease token is intentionally returned only by successful claim |
-| 9 | Gitee Provider completes an authorized repository flow | Manually verified | Gitee test repository `beijing-tongwei/test-use`, Issues `IK5A0U` and `IK5A0V`; both completed `ready → claimed → working → review → done` with real REST writes on 2026-07-30 |
+| 9 | Gitee Provider completes an authorized repository flow | Manually verified | Gitee test repository `beijing-tongwei/test-use`, Issues `IK5A0U` and `IK5A0V`; both completed `ready → claimed → working → review → done`, and explicit `auto_close` synchronized Gitee native state from `意向` to `已完成`, with real REST writes on 2026-07-30 |
 | 10 | Codex follows the Skill through a Fake Provider workflow | Ready, not executed | Tracked fixture and integrity test exist; run [`skill-forward-test.md`](skill-forward-test.md) in a genuinely fresh Agent session |
 | 11 | English and Chinese READMEs guide setup and Fake workflow | Automated | `TestReadmesDocumentCompleteFakeWorkflow` |
 | 12 | REST Token, REST OAuth, and MCP share capability/test boundaries | Automated | `Transport`, `Credential`, `OAuthCredentialSource`, access capability tests, and explicit MCP unsupported result |

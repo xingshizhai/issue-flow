@@ -504,6 +504,14 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 		got.AgentID != "reviewer-a" || !strings.Contains(got.Message, "accepted") {
 		t.Fatalf("complete event = %+v", got)
 	}
+	code, stdout, stderr = invoke(
+		"complete", "1", "--reviewer", "reviewer-a",
+		"--conclusion-file", conclusionPath, "--operation-id", "op_review_complete",
+		"--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("complete replay code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
 }
 
 func TestIssueOutputAndProgressWritesAreRedacted(t *testing.T) {
