@@ -162,6 +162,35 @@ func TestUpdateRejectsOperationIDSemanticCollisionWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsInvalidChangeBeforeNetworkAccess(t *testing.T) {
+	t.Parallel()
+
+	requests := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
+	})
+	working := domain.StateWorking
+	_, err := testProvider(handler).UpdateIssue(
+		context.Background(),
+		"IABC1",
+		provider.IssueChange{
+			WorkflowState: &working,
+			Event: domain.WorkflowEvent{
+				Version: 1, OperationID: "op_invalid", Operation: "start",
+				To: domain.StateReview,
+			},
+		},
+		provider.Precondition{},
+	)
+	if !errors.Is(err, provider.ErrPreconditionFailed) {
+		t.Fatalf("error = %v", err)
+	}
+	if requests != 0 {
+		t.Fatalf("invalid change performed %d network requests", requests)
+	}
+}
+
 func TestGetIssueAcceptsEventsOnlyFromTokenOwner(t *testing.T) {
 	t.Parallel()
 	lease := domain.Lease{

@@ -150,6 +150,9 @@ func (p *Provider) GetIssue(ctx context.Context, number string) (domain.Issue, e
 }
 
 func (p *Provider) UpdateIssue(ctx context.Context, number string, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
+	if err := provider.ValidateChange(change); err != nil {
+		return domain.Issue{}, err
+	}
 	current, err := p.GetIssue(ctx, number)
 	if err != nil {
 		return domain.Issue{}, err

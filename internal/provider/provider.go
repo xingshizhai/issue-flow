@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"issue-flow/internal/domain"
 )
@@ -65,6 +66,30 @@ func SameOperation(existing, requested domain.WorkflowEvent) bool {
 		existing.Message == requested.Message &&
 		existing.From == requested.From &&
 		existing.To == requested.To
+}
+
+func ValidateChange(change IssueChange) error {
+	if change.Event.Version != 1 ||
+		change.Event.OperationID == "" ||
+		change.Event.Operation == "" {
+		return fmt.Errorf("%w: event version, operation ID, and operation are required",
+			ErrPreconditionFailed)
+	}
+	if change.WorkflowState != nil && change.Event.To != *change.WorkflowState {
+		return fmt.Errorf("%w: event target %s does not match workflow target %s",
+			ErrPreconditionFailed, change.Event.To, *change.WorkflowState)
+	}
+	if change.Lease != nil {
+		if change.ClearLease {
+			return fmt.Errorf("%w: change cannot set and clear a lease",
+				ErrPreconditionFailed)
+		}
+		if change.Lease.ID == "" || change.Event.LeaseID != change.Lease.ID {
+			return fmt.Errorf("%w: event lease does not match change lease",
+				ErrPreconditionFailed)
+		}
+	}
+	return nil
 }
 
 type IssueWriter interface {

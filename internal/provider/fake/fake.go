@@ -127,6 +127,9 @@ func (s *Store) readUnlocked() (fileData, error) {
 }
 
 func (s *Store) UpdateIssue(ctx context.Context, number string, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {
+	if err := provider.ValidateChange(change); err != nil {
+		return domain.Issue{}, err
+	}
 	var updated domain.Issue
 	err := s.withLock(func() error {
 		if err := ctx.Err(); err != nil {

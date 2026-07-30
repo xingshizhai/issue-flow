@@ -69,15 +69,17 @@ func TestConcurrentUpdateHasOneWinner(t *testing.T) {
 		go func() {
 			<-start
 			state := domain.StateClaimed
+			leaseID := "lease_" + string(rune('a'+i))
 			_, err := New(path).UpdateIssue(context.Background(), "1", provider.IssueChange{
 				WorkflowState: &state,
 				Lease: &domain.Lease{
-					ID: "lease_" + string(rune('a'+i)), AgentID: "agent",
+					ID: leaseID, AgentID: "agent",
 					TokenHash: domain.HashLeaseToken(string(rune('a' + i))),
 					ExpiresAt: time.Now().Add(time.Hour),
 				},
 				Event: domain.WorkflowEvent{
 					Version: 1, OperationID: string(rune('a' + i)), Operation: "claim",
+					LeaseID: leaseID, From: domain.StateReady, To: state,
 				},
 			}, provider.Precondition{Version: "1", WorkflowState: domain.StateReady})
 			results <- err

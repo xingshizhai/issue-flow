@@ -350,6 +350,11 @@ Fake 和 Gitee Provider 也必须独立校验 operation ID 对应的 operation�
 lease、message 和状态转换语义。语义不同的重复 ID 返回前置条件冲突且不得产生
 任何写入；因此绕过 Workflow 直接调用 Provider 也不能削弱幂等约束。
 
+Provider 在读取远端状态之前校验 `IssueChange` 自洽性：事件版本、operation ID
+和 operation 必填；事件目标状态必须与标签目标一致；不得同时设置和清除 lease；
+事件 lease ID 必须与变更中的 lease 相同。无效变更在本地返回前置条件冲突，
+不得访问网络或修改 Fake 存储。
+
 claim 是例外：明文租约 token 只返回一次。已落盘 claim 的重放返回
 `LEASE_CONFLICT`，不能恢复 token；调用方不得通过新 claim 猜测所有权。
 
