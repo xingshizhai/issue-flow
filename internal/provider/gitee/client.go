@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"issue-flow/internal/provider"
+	"issue-flow/internal/redact"
 )
 
 const defaultBaseURL = "https://gitee.com/api/v5"
@@ -204,6 +205,7 @@ func mapHTTPError(response *http.Response) error {
 	if message == "" {
 		message = http.StatusText(response.StatusCode)
 	}
+	message = redact.New(nil).String(message)
 	var category error
 	switch response.StatusCode {
 	case http.StatusUnauthorized:

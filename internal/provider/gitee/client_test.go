@@ -32,6 +32,26 @@ func TestClientMapsErrorsWithoutLeakingToken(t *testing.T) {
 	}
 }
 
+func TestClientRedactsSecretsFromProviderErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"rejected access_token=response-secret Authorization: Bearer response-bearer"}`))
+	})
+	client := NewClientWithBaseURL("https://gitee.test", "request-secret", memoryHTTPClient(handler))
+	_, err := client.Get(context.Background(), "/test", nil, &struct{}{})
+	if !errors.Is(err, provider.ErrPermission) {
+		t.Fatalf("error = %v", err)
+	}
+	for _, secret := range []string{"response-secret", "response-bearer", "request-secret"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatalf("provider error leaked %q: %v", secret, err)
+		}
+	}
+}
+
 func TestClientMapsGiteePermissionMessageOn401(t *testing.T) {
 	t.Parallel()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
