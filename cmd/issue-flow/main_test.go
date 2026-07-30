@@ -207,6 +207,39 @@ func TestLeaseWorkflowAndAuthorization(t *testing.T) {
 	}
 }
 
+func TestNonHolderCannotUseLeaseCommands(t *testing.T) {
+	t.Parallel()
+
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "protected", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReady, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke("claim", "1", "--agent", "holder", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("claim code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	summary := filepath.Join(project, "summary.md")
+	if err := os.WriteFile(summary, []byte("safe summary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tests := [][]string{
+		{"heartbeat", "1", "--agent", "intruder", "--lease-token", "wrong"},
+		{"progress", "1", "--agent", "intruder", "--lease-token", "wrong", "--message", "unauthorized"},
+		{"block", "1", "--agent", "intruder", "--lease-token", "wrong", "--reason", "unauthorized"},
+		{"release", "1", "--agent", "intruder", "--lease-token", "wrong", "--reason", "unauthorized"},
+		{"finish", "1", "--agent", "intruder", "--lease-token", "wrong", "--summary-file", summary},
+	}
+	for _, args := range tests {
+		args = append(args, "--project", project, "--json")
+		code, stdout, stderr = invoke(args...)
+		if code != 5 || stderr != "" {
+			t.Errorf("%s code=%d stdout=%q stderr=%q", args[0], code, stdout, stderr)
+			continue
+		}
+		assertEnvelope(t, stdout, false, "LEASE_CONFLICT")
+	}
+}
+
 func TestReclaimExpiredLease(t *testing.T) {
 	t.Parallel()
 	expiredToken := "expired-secret"
@@ -259,6 +292,104 @@ func TestClaimDryRunDoesNotMutate(t *testing.T) {
 	}
 	if envelope.Data.WorkflowState != domain.StateReady || envelope.Data.Lease != nil {
 		t.Fatalf("dry-run mutated issue: %+v", envelope.Data)
+	}
+}
+
+func TestEveryLeaseWriteCommandDryRunDoesNotMutate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	const token = "dry-run-secret"
+	activeLease := &domain.Lease{
+		ID: "lease_dry_run", AgentID: "codex-a", TokenHash: domain.HashLeaseToken(token),
+		ClaimedAt: now.Add(-time.Hour), HeartbeatAt: now.Add(-time.Minute),
+		ExpiresAt: now.Add(time.Hour),
+	}
+	expiredLease := *activeLease
+	expiredLease.ExpiresAt = now.Add(-time.Minute)
+	tests := []struct {
+		name  string
+		issue domain.Issue
+		args  []string
+	}{
+		{
+			name:  "claim",
+			issue: domain.Issue{WorkflowState: domain.StateReady},
+			args:  []string{"claim", "1", "--agent", "codex-a"},
+		},
+		{
+			name:  "start",
+			issue: domain.Issue{WorkflowState: domain.StateClaimed, Lease: activeLease},
+			args:  []string{"start", "1", "--agent", "codex-a", "--lease-token", token},
+		},
+		{
+			name:  "heartbeat",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: activeLease},
+			args:  []string{"heartbeat", "1", "--agent", "codex-a", "--lease-token", token},
+		},
+		{
+			name:  "progress",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: activeLease},
+			args:  []string{"progress", "1", "--agent", "codex-a", "--lease-token", token, "--message", "dry run"},
+		},
+		{
+			name:  "block",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: activeLease},
+			args:  []string{"block", "1", "--agent", "codex-a", "--lease-token", token, "--reason", "dry run"},
+		},
+		{
+			name:  "release",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: activeLease},
+			args:  []string{"release", "1", "--agent", "codex-a", "--lease-token", token, "--reason", "dry run"},
+		},
+		{
+			name:  "reclaim",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: &expiredLease},
+			args:  []string{"reclaim", "1"},
+		},
+		{
+			name:  "finish",
+			issue: domain.Issue{WorkflowState: domain.StateWorking, Lease: activeLease},
+			args:  []string{"finish", "1", "--agent", "codex-a", "--lease-token", token},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			test.issue.ID = "1"
+			test.issue.Number = "1"
+			test.issue.Title = test.name
+			test.issue.ProviderState = domain.ProviderStateOpen
+			test.issue.Version = "1"
+			test.issue.CreatedAt = now
+			project := seededProject(t, test.issue)
+			args := append([]string(nil), test.args...)
+			if test.name == "finish" {
+				summary := filepath.Join(project, "summary.md")
+				if err := os.WriteFile(summary, []byte("dry-run summary"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--summary-file", summary)
+			}
+			storePath := filepath.Join(project, "issues.json")
+			before, err := os.ReadFile(storePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args = append(args, "--dry-run", "--project", project, "--json")
+			code, stdout, stderr := invoke(args...)
+			if code != 0 || stderr != "" {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			after, err := os.ReadFile(storePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("dry-run mutated Fake Provider storage")
+			}
+		})
 	}
 }
 
