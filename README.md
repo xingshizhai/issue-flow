@@ -69,7 +69,7 @@ issue-flow block 123 --agent "<stable-agent-id>" --lease-token "<token>" --reaso
 issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summary-file result.md
 ```
 
-The finish summary must be a regular file, not a symlink, and is limited to 64 KiB. A successful finish clears the lease and moves the Issue to `review`.
+The finish summary must be a stable regular file, not a symlink, and is limited to 64 KiB. The CLI opens it once, verifies that the opened descriptor matches the inspected path, and reads through that descriptor to reject path replacement races. A successful finish clears the lease and moves the Issue to `review`.
 
 ## Fake Provider walkthrough
 

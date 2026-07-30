@@ -209,7 +209,19 @@ func readSummaryFile(path string) (string, error) {
 	if info.Size() > maximumSummarySize {
 		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
 	}
-	raw, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: open summary file: %v", workflow.ErrInvalidInput, err)
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect opened summary file: %v", workflow.ErrInvalidInput, err)
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return "", fmt.Errorf("%w: summary file changed while opening", workflow.ErrInvalidInput)
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximumSummarySize+1))
 	if err != nil {
 		return "", fmt.Errorf("%w: read summary file: %v", workflow.ErrInvalidInput, err)
 	}

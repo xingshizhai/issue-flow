@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"issue-flow/internal/domain"
 	"issue-flow/internal/output"
 	"issue-flow/internal/provider"
+	"issue-flow/internal/workflow"
 )
 
 func TestCLIHelperProcess(t *testing.T) {
@@ -375,6 +377,37 @@ func TestFinishRejectsSymlinkSummary(t *testing.T) {
 		t.Fatalf("finish code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
+func TestReadSummaryFileEnforcesTypeAndSize(t *testing.T) {
+	t.Parallel()
+
+	project := t.TempDir()
+	if _, err := readSummaryFile(project); err == nil ||
+		!errors.Is(err, workflow.ErrInvalidInput) {
+		t.Fatalf("directory error = %v", err)
+	}
+	oversized := filepath.Join(project, "oversized.md")
+	if err := os.WriteFile(oversized, bytes.Repeat([]byte("x"), (64<<10)+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readSummaryFile(oversized); err == nil ||
+		!errors.Is(err, workflow.ErrInvalidInput) ||
+		!strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized error = %v", err)
+	}
+	allowed := filepath.Join(project, "allowed.md")
+	content := bytes.Repeat([]byte("a"), 64<<10)
+	if err := os.WriteFile(allowed, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := readSummaryFile(allowed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != string(content) {
+		t.Fatalf("summary length = %d", len(result))
+	}
 }
 
 func TestProgressRequiresMessage(t *testing.T) {
