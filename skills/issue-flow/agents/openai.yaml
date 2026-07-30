@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue Flow"
+  short_description: "Safely process development Issues through the CLI"
+  default_prompt: "Use $issue-flow to claim and handle the next eligible development Issue."

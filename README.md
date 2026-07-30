@@ -4,7 +4,7 @@
 
 Issue Flow gives coding agents a deterministic workflow for automatically handling bugs and development tasks in Codex, Claude Code, Cursor, VS Code agents, and other coding-agent environments.
 
-> Status: design and early implementation. Commands below describe the target MVP; check the current release before automation.
+> Status: Phase 1 MVP implementation. Build from a trusted checkout and validate the configuration before automation.
 
 ## Install
 
@@ -59,7 +59,7 @@ issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summ
 
 The finish summary must be a regular file, not a symlink, and is limited to 64 KiB. A successful finish clears the lease and moves the Issue to `review`.
 
-All environments share the same CLI and JSON contract; platform Skills/Rules remain thin. See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
+All environments share the same CLI and JSON contract. The repository includes a [Codex Skill](skills/issue-flow/SKILL.md) and thin [Claude Code](adapters/claude/CLAUDE.md), [Cursor](adapters/cursor/issue-flow.mdc), and [VS Code](adapters/vscode/issue-flow.instructions.md) adapters based on the [shared agent contract](adapters/generic/agent-workflow.md). See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.
 The test normally ensures the six configured workflow labels exist, which can require enterprise administrator permission. `GITEE_E2E_USE_EXISTING_LABELS=1` is available only for an isolated test repository and temporarily maps six standard labels; it must not be used as a production workflow configuration.
