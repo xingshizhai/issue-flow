@@ -59,6 +59,36 @@ issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summ
 
 The finish summary must be a regular file, not a symlink, and is limited to 64 KiB. A successful finish clears the lease and moves the Issue to `review`.
 
+## Fake Provider walkthrough
+
+Use an isolated project directory and a binary built from this trusted checkout. No network access or Provider token is needed:
+
+```bash
+mkdir issue-flow-demo
+./bin/issue-flow init --project issue-flow-demo
+cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
+./bin/issue-flow doctor --project issue-flow-demo --format json
+./bin/issue-flow list --ready --project issue-flow-demo --format json
+./bin/issue-flow context 1 --project issue-flow-demo --format json
+```
+
+Claim the Issue and copy `data.leaseToken` from the successful JSON response into an approved secret holder outside the project. Substitute it for `<claim-token>` below; do not commit or log it:
+
+```bash
+./bin/issue-flow claim 1 --agent "demo-agent" --project issue-flow-demo --format json
+./bin/issue-flow start 1 --agent "demo-agent" --lease-token "<claim-token>" --project issue-flow-demo --format json
+./bin/issue-flow progress 1 --agent "demo-agent" --lease-token "<claim-token>" --message "validation passed" --project issue-flow-demo --format json
+```
+
+After making and validating the intended change, create `result.md` as a regular file containing a secret-free summary, then deliver it:
+
+```bash
+./bin/issue-flow finish 1 --agent "demo-agent" --lease-token "<claim-token>" --summary-file result.md --project issue-flow-demo --format json
+./bin/issue-flow show 1 --project issue-flow-demo --format json
+```
+
+The final Issue state should be `review`. To exercise other terminal paths, start from a fresh copy of the example data and use `block` or `release` instead of `finish`. Add `--dry-run` to any write command to preview it without mutating the Fake store.
+
 All environments share the same CLI and JSON contract. The repository includes a [Codex Skill](skills/issue-flow/SKILL.md) and thin [Claude Code](adapters/claude/CLAUDE.md), [Cursor](adapters/cursor/issue-flow.mdc), and [VS Code](adapters/vscode/issue-flow.instructions.md) adapters based on the [shared agent contract](adapters/generic/agent-workflow.md). See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.
