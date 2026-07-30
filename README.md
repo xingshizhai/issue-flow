@@ -52,7 +52,8 @@ issue-flow create --type bug --title "Fix whitespace handling" --body-file issue
 
 Supported types are `bug`, `feature`, and `improvement`. The command adds the
 configured ready label and a `type:<type>` label; providers may ignore labels
-that do not exist or that the token cannot manage.
+that do not exist or that the token cannot manage. Gitee also receives the
+native Issue type (`缺陷` for bug, `需求` for feature and improvement).
 
 ## Agent workflow
 

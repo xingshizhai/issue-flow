@@ -52,7 +52,8 @@ issue-flow create --type bug --title "修复空白处理" --body-file issue.md
 
 支持 `bug`、`feature` 和 `improvement` 三种类型。命令会附加配置的
 ready 标签和 `type:<type>` 标签；Provider 可能忽略不存在或 Token
-无权管理的标签。
+无权管理的标签。Gitee 还会收到原生任务类型：bug 对应“缺陷”，feature
+和 improvement 对应“需求”。
 
 ## Agent 工作流
 

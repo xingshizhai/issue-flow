@@ -48,6 +48,7 @@ type IssueReader interface {
 type CreateIssueInput struct {
 	Title  string
 	Body   string
+	Type   string
 	Labels []string
 }
 

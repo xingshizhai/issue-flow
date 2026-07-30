@@ -46,6 +46,49 @@ func TestListIssuesMapsStateAndPagination(t *testing.T) {
 	}
 }
 
+func TestCreateIssueMapsNativeIssueType(t *testing.T) {
+	t.Parallel()
+	var createBody map[string]string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/issues":
+			if err := json.NewDecoder(r.Body).Decode(&createBody); err != nil {
+				t.Fatal(err)
+			}
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:ready")))
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1":
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:ready")))
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1/comments":
+			_, _ = w.Write([]byte(`[]`))
+		case r.URL.Path == "/user":
+			_, _ = w.Write([]byte(`{"id":7,"login":"automation"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := testProvider(handler).CreateIssue(context.Background(), provider.CreateIssueInput{
+		Title: "bug", Body: "details", Type: "bug",
+		Labels: []string{"type:bug", "agent:ready"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if createBody["issue_type"] != "缺陷" || createBody["labels"] != "type:bug,agent:ready" {
+		t.Fatalf("create body = %#v", createBody)
+	}
+	_, err = testProvider(handler).CreateIssue(context.Background(), provider.CreateIssueInput{
+		Title: "feature", Body: "details", Type: "feature",
+		Labels: []string{"type:feature", "agent:ready"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if createBody["issue_type"] != "需求" {
+		t.Fatalf("feature create body = %#v", createBody)
+	}
+}
+
 func TestCheckValidatesRepositoryAndWorkflowLabels(t *testing.T) {
 	t.Parallel()
 

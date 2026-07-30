@@ -150,11 +150,15 @@ func (p *Provider) GetIssue(ctx context.Context, number string) (domain.Issue, e
 }
 
 func (p *Provider) CreateIssue(ctx context.Context, input provider.CreateIssueInput) (domain.Issue, error) {
+	issueType := "需求"
+	if input.Type == "bug" {
+		issueType = "缺陷"
+	}
 	var created issueDTO
 	if _, err := p.client.Do(ctx, http.MethodPost,
 		"/repos/"+url.PathEscape(p.owner)+"/issues", nil, map[string]string{
 			"repo": p.repo, "title": input.Title, "body": input.Body,
-			"labels": strings.Join(input.Labels, ","),
+			"labels": strings.Join(input.Labels, ","), "issue_type": issueType,
 		}, &created); err != nil {
 		return domain.Issue{}, err
 	}

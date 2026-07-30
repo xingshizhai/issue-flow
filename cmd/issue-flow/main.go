@@ -143,7 +143,7 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 		return code
 	}
 	input := provider.CreateIssueInput{
-		Title: strings.TrimSpace(*title), Body: body,
+		Title: strings.TrimSpace(*title), Body: body, Type: *issueType,
 		Labels: []string{"type:" + *issueType, runtime.Config.Workflow.ReadyLabel},
 	}
 	if g.dryRun {
