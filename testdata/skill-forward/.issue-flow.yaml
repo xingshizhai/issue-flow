@@ -1,0 +1,39 @@
+version: 1
+
+provider:
+  type: fake
+  data_file: .issue-flow-fake.json
+
+workflow:
+  ready_label: agent:ready
+  claimed_label: agent:claimed
+  working_label: agent:working
+  blocked_label: agent:blocked
+  review_label: agent:review
+  done_label: agent:done
+  lease_minutes: 30
+  auto_close: false
+
+project:
+  instruction_files:
+    - AGENTS.md
+
+validation:
+  commands:
+    - argv: ["go", "test", "./..."]
+      timeout: 2m
+
+git:
+  branch_pattern: "{type}/issue-{number}-{slug}"
+  allow_commit: false
+  allow_push: false
+  allow_pull_request: false
+
+automation:
+  level: patch
+
+security:
+  redact_keys:
+    - token
+    - password
+    - authorization

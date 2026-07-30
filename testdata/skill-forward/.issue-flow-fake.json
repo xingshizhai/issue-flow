@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "issues": [
+    {
+      "id": "1",
+      "number": "1",
+      "title": "Return the expected greeting",
+      "body": "The Greeting function returns the wrong text. Make the smallest code change that satisfies the existing test. Follow project instructions and report validation.",
+      "providerState": "open",
+      "workflowState": "ready",
+      "labels": [
+        {
+          "name": "agent:ready"
+        },
+        {
+          "name": "type:bug"
+        }
+      ],
+      "assignees": [],
+      "comments": [],
+      "attachments": [],
+      "events": [],
+      "url": "fake://issues/1",
+      "version": "1",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ]
+}

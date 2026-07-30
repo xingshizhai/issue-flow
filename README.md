@@ -103,5 +103,7 @@ The final Issue state should be `review`. To exercise other terminal paths, star
 
 All environments share the same CLI and JSON contract. The repository includes a [Codex Skill](skills/issue-flow/SKILL.md) and thin [Claude Code](adapters/claude/CLAUDE.md), [Cursor](adapters/cursor/issue-flow.mdc), and [VS Code](adapters/vscode/issue-flow.instructions.md) adapters based on the [shared agent contract](adapters/generic/agent-workflow.md). See [requirements](docs/requirements.md) and [architecture](docs/architecture.md).
 
+Use the [isolated Skill forward-test guide](docs/skill-forward-test.md) to evaluate a fresh agent session. The tracked fixture is automatically checked to remain ready and initially failing; an actual fresh-session run is still required to evaluate agent behavior.
+
 Real Gitee tests are disabled by default. They require the explicit `ISSUE_FLOW_GITEE_E2E=1`, `GITEE_TOKEN`, `GITEE_OWNER`, and `GITEE_REPO` environment variables and create an Issue in the authorized test repository.
 The test normally ensures the six configured workflow labels exist, which can require enterprise administrator permission. `GITEE_E2E_USE_EXISTING_LABELS=1` is available only for an isolated test repository and temporarily maps six standard labels; it must not be used as a production workflow configuration.
