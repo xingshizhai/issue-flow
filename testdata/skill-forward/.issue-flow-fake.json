@@ -10,10 +10,10 @@
       "workflowState": "ready",
       "labels": [
         {
-          "name": "agent:ready"
+          "name": "agent-ready"
         },
         {
-          "name": "type:bug"
+          "name": "type-bug"
         }
       ],
       "assignees": [],

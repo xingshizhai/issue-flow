@@ -23,7 +23,7 @@ func TestListIssuesMapsStateAndPagination(t *testing.T) {
 		if r.URL.Path != "/repos/owner/repo/issues" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("labels") != "agent:ready" || r.URL.Query().Get("per_page") != "1" {
+		if r.URL.Query().Get("labels") != "agent-ready" || r.URL.Query().Get("per_page") != "1" {
 			t.Errorf("query = %v", r.URL.Query())
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -31,7 +31,7 @@ func TestListIssuesMapsStateAndPagination(t *testing.T) {
 		_, _ = w.Write([]byte(`[{
 			"id":10,"number":"IABC1","title":"bug","body":"details","state":"open",
 			"html_url":"https://gitee.test/owner/repo/issues/IABC1",
-			"labels":[{"name":"agent:ready"}],
+			"labels":[{"name":"agent-ready"}],
 			"created_at":"2026-07-30T01:00:00Z","updated_at":"2026-07-30T02:00:00Z"
 		}]`))
 	})
@@ -56,9 +56,9 @@ func TestCreateIssueMapsNativeIssueType(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&createBody); err != nil {
 				t.Fatal(err)
 			}
-			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:ready")))
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
 		case r.URL.Path == "/repos/owner/repo/issues/IABC1":
-			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:ready")))
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
 		case r.URL.Path == "/repos/owner/repo/issues/IABC1/comments":
 			_, _ = w.Write([]byte(`[]`))
 		case r.URL.Path == "/user":
@@ -69,17 +69,17 @@ func TestCreateIssueMapsNativeIssueType(t *testing.T) {
 	})
 	_, err := testProvider(handler).CreateIssue(context.Background(), provider.CreateIssueInput{
 		Title: "bug", Body: "details", Type: "bug",
-		Labels: []string{"type:bug", "agent:ready"},
+		Labels: []string{"type-bug", "agent-ready"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if createBody["issue_type"] != "缺陷" || createBody["labels"] != "type:bug,agent:ready" {
+	if createBody["issue_type"] != "缺陷" || createBody["labels"] != "type-bug,agent-ready" {
 		t.Fatalf("create body = %#v", createBody)
 	}
 	_, err = testProvider(handler).CreateIssue(context.Background(), provider.CreateIssueInput{
 		Title: "feature", Body: "details", Type: "feature",
-		Labels: []string{"type:feature", "agent:ready"},
+		Labels: []string{"type-feature", "agent-ready"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -101,9 +101,9 @@ func TestCheckValidatesRepositoryAndWorkflowLabels(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":10}`))
 		case "/repos/owner/repo/labels":
 			_, _ = w.Write([]byte(`[
-				{"name":"agent:ready"},{"name":"agent:claimed"},
-				{"name":"agent:working"},{"name":"agent:blocked"},
-				{"name":"agent:review"},{"name":"agent:done"}
+				{"name":"agent-ready"},{"name":"agent-claimed"},
+				{"name":"agent-working"},{"name":"agent-blocked"},
+				{"name":"agent-review"},{"name":"agent-done"}
 			]`))
 		default:
 			http.NotFound(w, r)
@@ -129,7 +129,7 @@ func TestCheckReportsMissingWorkflowLabelsWithoutWriting(t *testing.T) {
 		case "/repos/owner/repo":
 			_, _ = w.Write([]byte(`{"id":10}`))
 		case "/repos/owner/repo/labels":
-			_, _ = w.Write([]byte(`[{"name":"agent:ready"}]`))
+			_, _ = w.Write([]byte(`[{"name":"agent-ready"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -139,7 +139,7 @@ func TestCheckReportsMissingWorkflowLabelsWithoutWriting(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	for _, missing := range []string{
-		"agent:blocked", "agent:claimed", "agent:done", "agent:review", "agent:working",
+		"agent-blocked", "agent-claimed", "agent-done", "agent-review", "agent-working",
 	} {
 		if !strings.Contains(err.Error(), missing) {
 			t.Errorf("error %q does not name missing label %q", err, missing)
@@ -176,7 +176,7 @@ func TestUpdateRejectsOperationIDSemanticCollisionWithoutWriting(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/repos/owner/repo/issues/IABC1":
-			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:claimed")))
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-claimed")))
 		case "/repos/owner/repo/issues/IABC1/comments":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{
 				"id": 1, "body": body,
@@ -237,6 +237,7 @@ func TestUpdateRejectsInvalidChangeBeforeNetworkAccess(t *testing.T) {
 func TestSyncNativeStateClosesOnlyOptedInDoneIssues(t *testing.T) {
 	t.Parallel()
 	var requests int
+	var lastState string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		if r.Method != http.MethodPatch || r.URL.Path != "/repos/owner/issues/IABC1" {
@@ -246,11 +247,12 @@ func TestSyncNativeStateClosesOnlyOptedInDoneIssues(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body["repo"] != "repo" || body["state"] != "closed" {
+		if body["repo"] != "repo" {
 			t.Fatalf("body = %#v", body)
 		}
+		lastState = body["state"]
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(issueJSON("IABC1", "agent:done")))
+		_, _ = w.Write([]byte(issueJSON("IABC1", "agent-done")))
 	})
 	p := testProvider(handler)
 	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateDone); err != nil {
@@ -269,8 +271,39 @@ func TestSyncNativeStateClosesOnlyOptedInDoneIssues(t *testing.T) {
 	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateDone); err != nil {
 		t.Fatal(err)
 	}
-	if requests != 1 {
-		t.Fatalf("done performed %d requests", requests)
+	if requests != 1 || lastState != "closed" {
+		t.Fatalf("done performed %d requests state=%q", requests, lastState)
+	}
+}
+
+func TestSyncNativeStateUsesConfiguredProviderStates(t *testing.T) {
+	t.Parallel()
+	var requests int
+	var lastState string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		lastState = body["state"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(issueJSON("IABC1", "agent-working")))
+	})
+	p := testProvider(handler)
+	p.workflow.SyncProviderState = true
+	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateWorking); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 1 || lastState != "progressing" {
+		t.Fatalf("requests=%d state=%q", requests, lastState)
+	}
+	p.workflow.ProviderStates = map[string]string{"review": "open"}
+	if err := p.syncNativeState(context.Background(), "IABC1", domain.StateReview); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 || lastState != "open" {
+		t.Fatalf("override requests=%d state=%q", requests, lastState)
 	}
 }
 
@@ -295,7 +328,7 @@ func TestGetIssueAcceptsEventsOnlyFromTokenOwner(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/repos/owner/repo/issues/IABC1":
-			_, _ = w.Write([]byte(issueJSON("IABC1", "agent:claimed")))
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-claimed")))
 		case "/repos/owner/repo/issues/IABC1/comments":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"id": 1, "body": body, "user": map[string]any{"id": 7, "login": "automation"}, "created_at": "2026-07-30T02:00:00Z"},
@@ -336,7 +369,7 @@ func TestUpdateIssueWritesEventThenLabelsAndRereads(t *testing.T) {
 	var mu sync.Mutex
 	var calls []string
 	commentWritten := false
-	stateLabel := "agent:claimed"
+	stateLabel := "agent-claimed"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		calls = append(calls, r.Method+" "+r.URL.Path)
@@ -374,11 +407,11 @@ func TestUpdateIssueWritesEventThenLabelsAndRereads(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&labels); err != nil {
 				t.Error(err)
 			}
-			if len(labels) != 2 || labels[0] != "type:bug" || labels[1] != "agent:working" {
+			if len(labels) != 2 || labels[0] != "type-bug" || labels[1] != "agent-working" {
 				t.Errorf("labels = %v", labels)
 			}
-			stateLabel = "agent:working"
-			_, _ = w.Write([]byte(`[{"name":"type:bug"},{"name":"agent:working"}]`))
+			stateLabel = "agent-working"
+			_, _ = w.Write([]byte(`[{"name":"type-bug"},{"name":"agent-working"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -436,7 +469,7 @@ func issueJSON(number, workflowLabel string) string {
 	return fmt.Sprintf(`{
 		"id":10,"number":%q,"title":"bug","body":"details","state":"open",
 		"html_url":"https://gitee.test/owner/repo/issues/%s",
-		"labels":[{"name":"type:bug"},{"name":%q}],
+		"labels":[{"name":"type-bug"},{"name":%q}],
 		"created_at":"2026-07-30T01:00:00Z","updated_at":"2026-07-30T02:00:00Z"
 	}`, number, number, workflowLabel)
 }

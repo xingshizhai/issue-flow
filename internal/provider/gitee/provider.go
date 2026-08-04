@@ -232,18 +232,22 @@ func (p *Provider) UpdateIssue(ctx context.Context, number string, change provid
 }
 
 func (p *Provider) nativeStateNeedsSync(issue domain.Issue, state domain.WorkflowState) bool {
-	return p.workflow.AutoClose && state == domain.StateDone &&
-		issue.ProviderState != domain.ProviderStateClosed
+	target := p.workflow.ProviderStateFor(state)
+	if target == "" {
+		return false
+	}
+	return string(issue.ProviderState) != target
 }
 
 func (p *Provider) syncNativeState(ctx context.Context, number string, state domain.WorkflowState) error {
-	if !p.workflow.AutoClose || state != domain.StateDone {
+	target := p.workflow.ProviderStateFor(state)
+	if target == "" {
 		return nil
 	}
 	var updated issueDTO
 	_, err := p.client.Do(ctx, http.MethodPatch,
 		"/repos/"+url.PathEscape(p.owner)+"/issues/"+url.PathEscape(number), nil,
-		map[string]string{"repo": p.repo, "state": "closed"}, &updated)
+		map[string]string{"repo": p.repo, "state": target}, &updated)
 	return err
 }
 

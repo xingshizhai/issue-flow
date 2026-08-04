@@ -136,7 +136,12 @@ func within(root, target string) bool {
 func BranchName(pattern string, issue domain.Issue) (string, error) {
 	issueType := "task"
 	for _, label := range issue.Labels {
-		if value, found := strings.CutPrefix(strings.ToLower(label.Name), "type:"); found {
+		name := strings.ToLower(label.Name)
+		value, found := strings.CutPrefix(name, "type-")
+		if !found {
+			value, found = strings.CutPrefix(name, "type:")
+		}
+		if found {
 			switch value {
 			case "bug", "feature", "improvement":
 				issueType = value

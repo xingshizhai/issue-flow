@@ -32,11 +32,11 @@ Issue Flow 的主要使用者是能够开发代码的 Agent。它必须可被 VS
 
 ### UC-01 提交 Bug
 
-用户填写问题描述、复现步骤、预期结果和实际结果。系统附加经过脱敏的环境上下文，在 Gitee 创建带 `type:bug` 和 `agent:ready` 标签的 Issue。
+用户填写问题描述、复现步骤、预期结果和实际结果。系统附加经过脱敏的环境上下文，在 Gitee 创建带 `type-bug` 和 `agent-ready` 标签的 Issue。
 
 ### UC-02 提交需求
 
-用户填写背景、用户目标、功能范围和验收条件。系统创建带 `type:feature` 和适当优先级标签的 Issue。
+用户填写背景、用户目标、功能范围和验收条件。系统创建带 `type-feature` 和适当优先级标签的 Issue。
 
 ### UC-03 Agent 获取任务
 
@@ -68,12 +68,12 @@ Agent 可以将任务标记为阻塞或释放租约。Agent 异常退出后，�
 
 | 规范状态 | 默认标签 | 含义 |
 |---|---|---|
-| `ready` | `agent:ready` | 信息满足最低要求，可以领取 |
-| `claimed` | `agent:claimed` | 已获得有效租约，尚未开始或刚开始 |
-| `working` | `agent:working` | Agent 正在开发 |
-| `blocked` | `agent:blocked` | 缺少信息、权限或外部条件 |
-| `review` | `agent:review` | 开发和验证完成，等待审核 |
-| `done` | `agent:done` | 已被确认完成 |
+| `ready` | `agent-ready` | 信息满足最低要求，可以领取 |
+| `claimed` | `agent-claimed` | 已获得有效租约，尚未开始或刚开始 |
+| `working` | `agent-working` | Agent 正在开发 |
+| `blocked` | `agent-blocked` | 缺少信息、权限或外部条件 |
+| `review` | `agent-review` | 开发和验证完成，等待审核 |
+| `done` | `agent-done` | 已被确认完成 |
 
 ### 5.2 合法转换
 
@@ -92,9 +92,9 @@ review → working                  审核退回
 
 类型：
 
-- `type:bug`
-- `type:feature`
-- `type:improvement`
+- `type-bug`
+- `type-feature`
+- `type-improvement`
 
 优先级：
 
@@ -278,8 +278,8 @@ provider:
   token_env: GITEE_TOKEN
 
 workflow:
-  ready_label: agent:ready
-  review_label: agent:review
+  ready_label: agent-ready
+  review_label: agent-review
   lease_minutes: 120
   auto_close: false
 

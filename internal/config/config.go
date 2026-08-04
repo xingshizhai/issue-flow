@@ -38,14 +38,16 @@ type Provider struct {
 }
 
 type Workflow struct {
-	ReadyLabel   string `yaml:"ready_label" json:"readyLabel"`
-	ClaimedLabel string `yaml:"claimed_label" json:"claimedLabel"`
-	WorkingLabel string `yaml:"working_label" json:"workingLabel"`
-	BlockedLabel string `yaml:"blocked_label" json:"blockedLabel"`
-	ReviewLabel  string `yaml:"review_label" json:"reviewLabel"`
-	DoneLabel    string `yaml:"done_label" json:"doneLabel"`
-	LeaseMinutes int    `yaml:"lease_minutes" json:"leaseMinutes"`
-	AutoClose    bool   `yaml:"auto_close" json:"autoClose"`
+	ReadyLabel        string            `yaml:"ready_label" json:"readyLabel"`
+	ClaimedLabel      string            `yaml:"claimed_label" json:"claimedLabel"`
+	WorkingLabel      string            `yaml:"working_label" json:"workingLabel"`
+	BlockedLabel      string            `yaml:"blocked_label" json:"blockedLabel"`
+	ReviewLabel       string            `yaml:"review_label" json:"reviewLabel"`
+	DoneLabel         string            `yaml:"done_label" json:"doneLabel"`
+	LeaseMinutes      int               `yaml:"lease_minutes" json:"leaseMinutes"`
+	AutoClose         bool              `yaml:"auto_close" json:"autoClose"`
+	SyncProviderState bool              `yaml:"sync_provider_state" json:"syncProviderState"`
+	ProviderStates    map[string]string `yaml:"provider_states,omitempty" json:"providerStates,omitempty"`
 }
 
 type Project struct {
@@ -84,12 +86,14 @@ func Default() Config {
 			DataFile: ".issue-flow-fake.json",
 		},
 		Workflow: Workflow{
-			ReadyLabel:   "agent:ready",
-			ClaimedLabel: "agent:claimed",
-			WorkingLabel: "agent:working",
-			BlockedLabel: "agent:blocked",
-			ReviewLabel:  "agent:review",
-			DoneLabel:    "agent:done",
+			// Hyphenated names: Gitee rejects ":" in label names (letters,
+			// digits, . _ - / \ and CJK only; length 2–20).
+			ReadyLabel:   "agent-ready",
+			ClaimedLabel: "agent-claimed",
+			WorkingLabel: "agent-working",
+			BlockedLabel: "agent-blocked",
+			ReviewLabel:  "agent-review",
+			DoneLabel:    "agent-done",
 			LeaseMinutes: 120,
 		},
 		Project:    Project{InstructionFiles: []string{"AGENTS.md", "CLAUDE.md"}},
@@ -133,6 +137,53 @@ func (w Workflow) StateForLabel(label string) domain.WorkflowState {
 	return ""
 }
 
+// ProviderStateFor returns the Gitee native Issue state for a workflow state.
+// Empty means "do not sync native state for this transition".
+//
+// Precedence:
+//  1. workflow.provider_states[state] when set
+//  2. defaults when workflow.sync_provider_state is true
+//  3. "closed" for done when workflow.auto_close is true
+func (w Workflow) ProviderStateFor(state domain.WorkflowState) string {
+	if w.ProviderStates != nil {
+		if value := strings.TrimSpace(w.ProviderStates[string(state)]); value != "" {
+			return normalizeProviderState(value)
+		}
+	}
+	if w.SyncProviderState {
+		return defaultProviderState(state)
+	}
+	if w.AutoClose && state == domain.StateDone {
+		return string(domain.ProviderStateClosed)
+	}
+	return ""
+}
+
+func defaultProviderState(state domain.WorkflowState) string {
+	switch state {
+	case domain.StateReady, domain.StateBlocked:
+		return string(domain.ProviderStateOpen)
+	case domain.StateClaimed, domain.StateWorking, domain.StateReview:
+		return string(domain.ProviderStateProgressing)
+	case domain.StateDone:
+		return string(domain.ProviderStateClosed)
+	default:
+		return ""
+	}
+}
+
+func normalizeProviderState(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(domain.ProviderStateOpen),
+		string(domain.ProviderStateProgressing),
+		string(domain.ProviderStateClosed),
+		string(domain.ProviderStateRejected):
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
+}
+
 func (c Config) Validate() error {
 	if c.Version != CurrentVersion {
 		return fmt.Errorf("unsupported config version %d", c.Version)
@@ -173,6 +224,21 @@ func (c Config) Validate() error {
 			return fmt.Errorf("workflow label %q is used for both %s and %s", label, previous, state)
 		}
 		labels[label] = state
+	}
+	for key, value := range c.Workflow.ProviderStates {
+		state := domain.WorkflowState(strings.TrimSpace(key))
+		switch state {
+		case domain.StateReady, domain.StateClaimed, domain.StateWorking,
+			domain.StateBlocked, domain.StateReview, domain.StateDone:
+		default:
+			return fmt.Errorf("workflow.provider_states has unknown workflow state %q", key)
+		}
+		if normalizeProviderState(value) == "" {
+			return fmt.Errorf(
+				"workflow.provider_states.%s must be open, progressing, closed, or rejected",
+				key,
+			)
+		}
 	}
 	switch c.Automation.Level {
 	case "inspect", "patch", "commit", "delivery":

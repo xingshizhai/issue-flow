@@ -5,12 +5,12 @@ provider:
   data_file: .issue-flow-fake.json
 
 workflow:
-  ready_label: agent:ready
-  claimed_label: agent:claimed
-  working_label: agent:working
-  blocked_label: agent:blocked
-  review_label: agent:review
-  done_label: agent:done
+  ready_label: agent-ready
+  claimed_label: agent-claimed
+  working_label: agent-working
+  blocked_label: agent-blocked
+  review_label: agent-review
+  done_label: agent-done
   lease_minutes: 30
   auto_close: false
 

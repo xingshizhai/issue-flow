@@ -16,8 +16,10 @@ const (
 type ProviderState string
 
 const (
-	ProviderStateOpen   ProviderState = "open"
-	ProviderStateClosed ProviderState = "closed"
+	ProviderStateOpen        ProviderState = "open"
+	ProviderStateProgressing ProviderState = "progressing"
+	ProviderStateClosed      ProviderState = "closed"
+	ProviderStateRejected    ProviderState = "rejected"
 )
 
 type Label struct {

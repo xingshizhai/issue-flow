@@ -7,14 +7,24 @@ provider:
   token_env: GITEE_TOKEN
 
 workflow:
-  ready_label: agent:ready
-  claimed_label: agent:claimed
-  working_label: agent:working
-  blocked_label: agent:blocked
-  review_label: agent:review
-  done_label: agent:done
+  # Gitee forbids ":" in label names; prefer hyphens (length 2–20).
+  ready_label: agent-ready
+  claimed_label: agent-claimed
+  working_label: agent-working
+  blocked_label: agent-blocked
+  review_label: agent-review
+  done_label: agent-done
   lease_minutes: 120
   auto_close: false
+  # Sync Gitee native Issue state (open/progressing/closed/rejected).
+  sync_provider_state: true
+  provider_states:
+    ready: open
+    claimed: progressing
+    working: progressing
+    blocked: open
+    review: progressing
+    done: closed
 
 project:
   instruction_files:

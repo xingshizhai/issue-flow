@@ -10,7 +10,7 @@
       "workflowState": "ready",
       "labels": [
         {
-          "name": "agent:ready"
+          "name": "agent-ready"
         }
       ],
       "assignees": [],

@@ -28,7 +28,11 @@ func encodeEvent(change provider.IssueChange) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return eventPrefix + string(raw) + eventSuffix + "\n\nIssue Flow: " + change.Event.Operation, nil
+	visible := "### Issue Flow: " + change.Event.Operation
+	if message := strings.TrimSpace(change.Event.Message); message != "" {
+		visible += "\n\n" + message
+	}
+	return eventPrefix + string(raw) + eventSuffix + "\n\n" + visible, nil
 }
 
 func decodeEvent(body string) (eventRecord, bool) {

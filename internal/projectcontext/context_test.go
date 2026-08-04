@@ -25,7 +25,7 @@ func TestBuildContext(t *testing.T) {
 	}}
 	result, err := Build(domain.Issue{
 		Number: "IABC1", Title: "Fix: unsafe / input", WorkflowState: domain.StateReady,
-		Labels: []domain.Label{{Name: "type:bug"}},
+		Labels: []domain.Label{{Name: "type-bug"}},
 	}, cfg, root)
 	if err != nil {
 		t.Fatal(err)

@@ -126,6 +126,9 @@ and type metadata:
 |---|---|
 | `CONFIG_ERROR` | Run `doctor --format json`; check the project path, YAML, `.env` mode `0600`, and `GITEE_TOKEN`. |
 | Missing workflow labels | Use labels already available in the repository or have an authorized administrator create them; `doctor` never creates labels implicitly. |
+| Gitee rejects `agent:ready` | Gitee label names cannot contain `:`. Use `agent-ready` / `agent-claimed` / `agent-working` / `agent-blocked` / `agent-review` / `agent-done` (length 2–20). |
+| Gitee still shows “待确认” (native state) | Enable `workflow.sync_provider_state` (optional `provider_states`). claim/start/finish sync to `progressing` by default; `done` syncs to `closed`. Enterprise custom Kanban titles may still need enterprise API mapping. |
+| Finish comment lacks root cause/fix | Newer builds append the `--summary-file` body to the visible comment (machine event HTML comment remains). |
 | `LEASE_CONFLICT` | Do not reclaim an active lease or guess a lost token; wait for the maintainer to reclaim it after expiry. |
 | `RATE_LIMITED` / `PROVIDER_UNAVAILABLE` | Retry the exact same command with its returned `--operation-id`. |
 | Gitee still shows the initial native state | Enable `workflow.auto_close` for explicit `complete`; labels and native Gitee status are separate fields. |

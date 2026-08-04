@@ -692,8 +692,8 @@ provider:
   type: fake
   data_file: issues.json
 workflow:
-  ready_label: agent:ready
-  review_label: agent:review
+  ready_label: agent-ready
+  review_label: agent-review
   lease_minutes: 120
   auto_close: false
 `), 0o600); err != nil {
@@ -712,7 +712,7 @@ func TestContextJSONIncludesSafeProjectPolicy(t *testing.T) {
 		ID: "IABC1", Number: "IABC1", Title: "Fix unsafe input",
 		ProviderState: domain.ProviderStateOpen, WorkflowState: domain.StateReady,
 		Version: "1", CreatedAt: time.Now().UTC(),
-		Labels: []domain.Label{{Name: "type:bug"}},
+		Labels: []domain.Label{{Name: "type-bug"}},
 	})
 	if err := os.WriteFile(filepath.Join(project, "AGENTS.md"), []byte("project instructions"), 0o600); err != nil {
 		t.Fatal(err)
@@ -784,8 +784,8 @@ func TestCreatePersistsReadyTypedIssue(t *testing.T) {
 		t.Fatalf("created issue = %+v", envelope.Data)
 	}
 	if len(envelope.Data.Labels) != 2 ||
-		envelope.Data.Labels[0].Name != "type:feature" ||
-		envelope.Data.Labels[1].Name != "agent:ready" {
+		envelope.Data.Labels[0].Name != "type-feature" ||
+		envelope.Data.Labels[1].Name != "agent-ready" {
 		t.Fatalf("labels = %+v", envelope.Data.Labels)
 	}
 }
@@ -825,8 +825,8 @@ provider:
   type: fake
   data_file: issues.json
 workflow:
-  ready_label: agent:ready
-  review_label: agent:review
+  ready_label: agent-ready
+  review_label: agent-review
   lease_minutes: 120
   auto_close: false
 `)

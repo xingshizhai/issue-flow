@@ -4,3 +4,7 @@
 /.env
 /.issue-flow.yaml
 /.issue-flow-fake.json
+
+# Local lease tokens and claim responses
+.lease/
+
