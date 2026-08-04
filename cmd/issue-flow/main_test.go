@@ -826,6 +826,45 @@ func TestCreateMergesCustomLabelsAndDedupes(t *testing.T) {
 	}
 }
 
+func TestListUnmanagedFiltersToNoWorkflowLabel(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t,
+		domain.Issue{Number: "1", Title: "unmanaged one", Version: "1"},
+		domain.Issue{Number: "2", Title: "ready", WorkflowState: domain.StateReady, Version: "1"},
+		domain.Issue{Number: "3", Title: "unmanaged two", Version: "1"},
+	)
+	code, stdout, stderr := invoke("list", "--unmanaged", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("list code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			Items []domain.Issue `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Items) != 2 {
+		t.Fatalf("items = %+v, want 2 unmanaged issues", envelope.Data.Items)
+	}
+	for _, issue := range envelope.Data.Items {
+		if issue.WorkflowState != "" {
+			t.Fatalf("issue %s has workflow state %q, want unmanaged", issue.Number, issue.WorkflowState)
+		}
+	}
+}
+
+func TestListUnmanagedRejectsCombinationWithReady(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	code, stdout, _ := invoke("list", "--unmanaged", "--ready", "--project", project, "--json")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
 func TestAdoptSetsReadyAndRejectsAlreadyManaged(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{

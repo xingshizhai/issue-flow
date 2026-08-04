@@ -542,6 +542,7 @@ func (c *cli) list(ctx context.Context, g globals, args []string) int {
 	flags.SetOutput(c.stderr)
 	ready := flags.Bool("ready", false, "list ready issues")
 	state := flags.String("state", "", "workflow state")
+	unmanaged := flags.Bool("unmanaged", false, "list issues with no workflow label at all (adopt candidates)")
 	limit := flags.Int("limit", 50, "maximum issues")
 	cursor := flags.String("cursor", "", "pagination cursor")
 	if err := flags.Parse(args); err != nil {
@@ -552,6 +553,9 @@ func (c *cli) list(ctx context.Context, g globals, args []string) int {
 	}
 	if *ready && *state != "" {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--ready and --state cannot be combined"), 2)
+	}
+	if *unmanaged && (*ready || *state != "") {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--unmanaged cannot be combined with --ready or --state"), 2)
 	}
 	queryState := domain.WorkflowState(*state)
 	if *ready {
@@ -572,6 +576,20 @@ func (c *cli) list(ctx context.Context, g globals, args []string) int {
 	})
 	if err != nil {
 		return c.providerFailure(g.format, err)
+	}
+	if *unmanaged {
+		// --unmanaged has no server-side equivalent (ListQuery.State only
+		// ever names one real workflow state) — filtered within whatever
+		// page was fetched, so a repo with unmanaged issues scattered past
+		// --limit needs --cursor to see the rest, same as any other filter
+		// here.
+		filtered := page.Items[:0]
+		for _, issue := range page.Items {
+			if issue.WorkflowState == "" {
+				filtered = append(filtered, issue)
+			}
+		}
+		page.Items = filtered
 	}
 	sanitizer := redact.New(runtime.Config.Security.RedactKeys)
 	for i := range page.Items {
