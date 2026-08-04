@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,9 @@ func TestEnterpriseSetIssueStateByTitle(t *testing.T) {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer ent-token" {
 			t.Fatalf("auth = %q", auth)
+		}
+		if !strings.Contains(r.Header.Get("User-Agent"), "mcp-gitee-ent") {
+			t.Fatalf("User-Agent = %q", r.Header.Get("User-Agent"))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		switch {

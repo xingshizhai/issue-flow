@@ -94,12 +94,17 @@ func (p *Provider) Check(ctx context.Context) error {
 		return fmt.Errorf("%w: missing workflow labels: %s",
 			provider.ErrMisconfigured, strings.Join(missing, ", "))
 	}
-	if p.native != nil {
-		if err := p.native.Check(ctx); err != nil {
-			return err
-		}
-	}
+	// Enterprise Kanban sync is optional for doctor/claim. Auth failures are
+	// reported via CheckEnterprise so Open API workflows can continue.
 	return nil
+}
+
+// CheckEnterprise validates the optional enterprise HTTP backend.
+func (p *Provider) CheckEnterprise(ctx context.Context) error {
+	if p.native == nil {
+		return nil
+	}
+	return p.native.Check(ctx)
 }
 
 func (p *Provider) listLabelNames(ctx context.Context) (map[string]bool, error) {

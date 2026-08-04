@@ -102,11 +102,13 @@ func (r *Runtime) Context(ctx context.Context, number string) (projectcontext.Co
 }
 
 type DoctorResult struct {
-	ConfigPath   string                `json:"configPath"`
-	ProviderType string                `json:"providerType"`
-	TokenEnv     string                `json:"tokenEnv,omitempty"`
-	TokenSet     bool                  `json:"tokenSet"`
-	Capabilities provider.Capabilities `json:"capabilities"`
+	ConfigPath     string                `json:"configPath"`
+	ProviderType   string                `json:"providerType"`
+	TokenEnv       string                `json:"tokenEnv,omitempty"`
+	TokenSet       bool                  `json:"tokenSet"`
+	Capabilities   provider.Capabilities `json:"capabilities"`
+	EnterpriseOK   *bool                 `json:"enterpriseOk,omitempty"`
+	EnterpriseErr  string                `json:"enterpriseError,omitempty"`
 }
 
 func (r *Runtime) Doctor(ctx context.Context) (DoctorResult, error) {
@@ -121,6 +123,16 @@ func (r *Runtime) Doctor(ctx context.Context) (DoctorResult, error) {
 	}
 	if err := r.Provider.Check(ctx); err != nil {
 		return result, err
+	}
+	if gp, ok := r.Provider.(interface {
+		CheckEnterprise(context.Context) error
+	}); ok && r.Config.Provider.Enterprise.Enabled {
+		okFlag := true
+		if err := gp.CheckEnterprise(ctx); err != nil {
+			okFlag = false
+			result.EnterpriseErr = err.Error()
+		}
+		result.EnterpriseOK = &okFlag
 	}
 	return result, nil
 }

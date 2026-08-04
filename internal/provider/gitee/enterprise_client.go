@@ -220,6 +220,9 @@ func (c *EnterpriseClient) do(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Gitee enterprise MCP endpoints reject non-MCP clients with
+	// "Only For MCP Gitee Enterprise Application".
+	req.Header.Set("User-Agent", "mcp-gitee-ent issue-flow")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err

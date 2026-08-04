@@ -2,6 +2,7 @@ package gitee
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -61,6 +62,12 @@ type compositeNativeState struct {
 func (s *compositeNativeState) Sync(ctx context.Context, number string, state domain.WorkflowState) error {
 	for _, part := range s.parts {
 		if err := part.Sync(ctx, number, state); err != nil {
+			if _, ok := part.(*enterpriseNativeState); ok {
+				// Do not fail the Open API label/event transition when enterprise
+				// Kanban sync is misconfigured (wrong token type, etc.).
+				log.Printf("issue-flow: enterprise state sync skipped for %s: %v", number, err)
+				continue
+			}
 			return err
 		}
 	}
