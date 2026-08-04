@@ -207,11 +207,25 @@ func (c *cli) comment(ctx context.Context, g globals, args []string) int {
 	flags := flag.NewFlagSet("comment", flag.ContinueOnError)
 	flags.SetOutput(c.stderr)
 	body := flags.String("body", "", "comment text")
+	bodyFile := flags.String("body-file", "", "path to comment text, instead of --body")
 	if err := flags.Parse(args[1:]); err != nil {
 		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
 	}
-	if flags.NArg() != 0 || strings.TrimSpace(*body) == "" {
-		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("comment requires --body and no extra arguments"), 2)
+	if flags.NArg() != 0 {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("comment accepts only one issue number"), 2)
+	}
+	if *body != "" && *bodyFile != "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--body and --body-file are mutually exclusive"), 2)
+	}
+	if *bodyFile != "" {
+		fileBody, err := readTextFile("comment body file", *bodyFile, 64<<10)
+		if err != nil {
+			return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+		}
+		*body = fileBody
+	}
+	if strings.TrimSpace(*body) == "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("comment requires --body or --body-file"), 2)
 	}
 	runtime, code := c.open(g)
 	if runtime == nil {
@@ -412,35 +426,42 @@ func readSummaryFile(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("%w: --summary-file is required", workflow.ErrInvalidInput)
 	}
+	return readTextFile("summary file", path, 64<<10)
+}
+
+// readTextFile reads path as a TOCTOU-safe regular file (no symlinks, size
+// capped at maxSize), used for any command's long-form text input
+// (--body-file/--summary-file/--conclusion-file). label appears in error
+// messages so callers get a message specific to the flag they used.
+func readTextFile(label, path string, maxSize int64) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return "", fmt.Errorf("%w: read summary file: %v", workflow.ErrInvalidInput, err)
+		return "", fmt.Errorf("%w: read %s: %v", workflow.ErrInvalidInput, label, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%w: summary file must be a regular file, not a symlink", workflow.ErrInvalidInput)
+		return "", fmt.Errorf("%w: %s must be a regular file, not a symlink", workflow.ErrInvalidInput, label)
 	}
-	const maximumSummarySize = 64 << 10
-	if info.Size() > maximumSummarySize {
-		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
+	if info.Size() > maxSize {
+		return "", fmt.Errorf("%w: %s exceeds %d bytes", workflow.ErrInvalidInput, label, maxSize)
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("%w: open summary file: %v", workflow.ErrInvalidInput, err)
+		return "", fmt.Errorf("%w: open %s: %v", workflow.ErrInvalidInput, label, err)
 	}
 	defer file.Close()
 	openedInfo, err := file.Stat()
 	if err != nil {
-		return "", fmt.Errorf("%w: inspect opened summary file: %v", workflow.ErrInvalidInput, err)
+		return "", fmt.Errorf("%w: inspect opened %s: %v", workflow.ErrInvalidInput, label, err)
 	}
 	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
-		return "", fmt.Errorf("%w: summary file changed while opening", workflow.ErrInvalidInput)
+		return "", fmt.Errorf("%w: %s changed while opening", workflow.ErrInvalidInput, label)
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, maximumSummarySize+1))
+	raw, err := io.ReadAll(io.LimitReader(file, maxSize+1))
 	if err != nil {
-		return "", fmt.Errorf("%w: read summary file: %v", workflow.ErrInvalidInput, err)
+		return "", fmt.Errorf("%w: read %s: %v", workflow.ErrInvalidInput, label, err)
 	}
-	if len(raw) > maximumSummarySize {
-		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
+	if int64(len(raw)) > maxSize {
+		return "", fmt.Errorf("%w: %s exceeds %d bytes", workflow.ErrInvalidInput, label, maxSize)
 	}
 	return string(raw), nil
 }
@@ -453,37 +474,11 @@ func readSummaryFile(path string) (string, error) {
 // sized for a token rather than a long-form document, and trimmed since a
 // token is typically written with a trailing newline (echo, printf).
 func readLeaseTokenFile(path string) (string, error) {
-	const maximumTokenFileSize = 4 << 10
-	info, err := os.Lstat(path)
+	raw, err := readTextFile("lease token file", path, 4<<10)
 	if err != nil {
-		return "", fmt.Errorf("%w: read lease token file: %v", workflow.ErrInvalidInput, err)
+		return "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%w: lease token file must be a regular file, not a symlink", workflow.ErrInvalidInput)
-	}
-	if info.Size() > maximumTokenFileSize {
-		return "", fmt.Errorf("%w: lease token file exceeds %d bytes", workflow.ErrInvalidInput, maximumTokenFileSize)
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("%w: open lease token file: %v", workflow.ErrInvalidInput, err)
-	}
-	defer file.Close()
-	openedInfo, err := file.Stat()
-	if err != nil {
-		return "", fmt.Errorf("%w: inspect opened lease token file: %v", workflow.ErrInvalidInput, err)
-	}
-	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
-		return "", fmt.Errorf("%w: lease token file changed while opening", workflow.ErrInvalidInput)
-	}
-	raw, err := io.ReadAll(io.LimitReader(file, maximumTokenFileSize+1))
-	if err != nil {
-		return "", fmt.Errorf("%w: read lease token file: %v", workflow.ErrInvalidInput, err)
-	}
-	if len(raw) > maximumTokenFileSize {
-		return "", fmt.Errorf("%w: lease token file exceeds %d bytes", workflow.ErrInvalidInput, maximumTokenFileSize)
-	}
-	token := strings.TrimSpace(string(raw))
+	token := strings.TrimSpace(raw)
 	if token == "" {
 		return "", fmt.Errorf("%w: lease token file is empty", workflow.ErrInvalidInput)
 	}

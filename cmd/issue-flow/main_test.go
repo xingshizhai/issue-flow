@@ -919,6 +919,36 @@ func TestLeaseTokenFileRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestCommentAcceptsBodyFileAndRejectsBothFlags(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "existing", WorkflowState: domain.StateReady, Version: "1",
+	})
+	bodyPath := filepath.Join(project, "comment-body.md")
+	if err := os.WriteFile(bodyPath, []byte("## multi-line\n\nvia --body-file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke("comment", "1", "--body-file", bodyPath, "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("comment code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Comment `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Body != "## multi-line\n\nvia --body-file" {
+		t.Fatalf("comment = %+v", envelope.Data)
+	}
+
+	code, stdout, _ = invoke("comment", "1", "--body", "inline", "--body-file", bodyPath, "--project", project, "--json")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
 func TestCommentAddsPlainTextWithoutLease(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{
