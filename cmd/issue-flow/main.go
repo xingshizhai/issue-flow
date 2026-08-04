@@ -173,7 +173,27 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 		return c.providerFailure(g.format, err)
 	}
 	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
-	return c.success(g.format, issue, fmt.Sprintf("#%s %s", issue.Number, issue.Title))
+	return c.success(g.format, issue, fmt.Sprintf("#%s %s", issue.Number, issue.Title),
+		missingLabelWarnings(labels, issue.Labels)...)
+}
+
+// missingLabelWarnings reports requested labels the provider didn't actually
+// attach. Gitee silently drops labels that don't already exist on the repo
+// (and possibly others a token lacks permission to manage) instead of
+// erroring or auto-creating them — without this, a caller has no way to
+// know a label like "priority:high" never landed.
+func missingLabelWarnings(requested []string, actual []domain.Label) []string {
+	present := make(map[string]bool, len(actual))
+	for _, label := range actual {
+		present[label.Name] = true
+	}
+	var warnings []string
+	for _, name := range requested {
+		if !present[name] {
+			warnings = append(warnings, fmt.Sprintf("label %q was requested but is not on the created issue (Gitee silently drops labels that don't already exist on the repo, or that the token can't manage)", name))
+		}
+	}
+	return warnings
 }
 
 // comment posts a plain-text comment to an issue. Unlike claim/start/.../finish,
@@ -246,7 +266,8 @@ func (c *cli) adopt(ctx context.Context, g globals, args []string) int {
 		return c.providerFailure(g.format, err)
 	}
 	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
-	return c.success(g.format, issue, fmt.Sprintf("#%s adopted into ready", issue.Number))
+	return c.success(g.format, issue, fmt.Sprintf("#%s adopted into ready", issue.Number),
+		missingLabelWarnings([]string{runtime.Config.Workflow.ReadyLabel}, issue.Labels)...)
 }
 
 func (c *cli) context(ctx context.Context, g globals, args []string) int {
@@ -646,17 +667,22 @@ func (c *cli) workflowFailure(format, operationID string, err error) int {
 	}
 }
 
-func (c *cli) success(format string, data any, text string) int {
-	return c.successWithID(format, operationID(), data, text)
+func (c *cli) success(format string, data any, text string, warnings ...string) int {
+	return c.successWithID(format, operationID(), data, text, warnings...)
 }
 
-func (c *cli) successWithID(format, operationID string, data any, text string) int {
+func (c *cli) successWithID(format, operationID string, data any, text string, warnings ...string) int {
 	if format == "json" {
 		_ = output.JSON(c.stdout, output.Envelope{
-			OK: true, OperationID: operationID, Data: data,
+			OK: true, OperationID: operationID, Data: data, Warnings: warnings,
 		})
-	} else if text != "" {
-		fmt.Fprintln(c.stdout, text)
+	} else {
+		if text != "" {
+			fmt.Fprintln(c.stdout, text)
+		}
+		for _, w := range warnings {
+			fmt.Fprintln(c.stderr, "issue-flow: warning: "+w)
+		}
 	}
 	return 0
 }

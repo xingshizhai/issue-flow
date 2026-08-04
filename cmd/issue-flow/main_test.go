@@ -895,6 +895,51 @@ func TestCommentRequiresBody(t *testing.T) {
 	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
 }
 
+func TestMissingLabelWarningsReportsOnlyAbsentLabels(t *testing.T) {
+	t.Parallel()
+	got := missingLabelWarnings(
+		[]string{"type-bug", "agent-ready", "priority:high"},
+		[]domain.Label{{Name: "type-bug"}, {Name: "agent-ready"}},
+	)
+	if len(got) != 1 || !strings.Contains(got[0], `"priority:high"`) {
+		t.Fatalf("warnings = %v", got)
+	}
+	if none := missingLabelWarnings(
+		[]string{"type-bug", "agent-ready"},
+		[]domain.Label{{Name: "type-bug"}, {Name: "agent-ready"}},
+	); len(none) != 0 {
+		t.Fatalf("expected no warnings when every label is present, got %v", none)
+	}
+}
+
+func TestCreateReturnsNoWarningsWhenAllLabelsLand(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	bodyPath := filepath.Join(project, "body.md")
+	if err := os.WriteFile(bodyPath, []byte("details"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke(
+		"create", "--type", "bug", "--title", "t",
+		"--body-file", bodyPath, "--label", "priority:high", "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("create code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	// Fake provider attaches every requested label verbatim (unlike real
+	// Gitee, which can silently drop ones that don't exist on the repo), so
+	// this exercises the happy path: no false-positive warnings.
+	if len(envelope.Warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", envelope.Warnings)
+	}
+}
+
 func invoke(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := (&cli{stdout: &stdout, stderr: &stderr}).run(context.Background(), args)
