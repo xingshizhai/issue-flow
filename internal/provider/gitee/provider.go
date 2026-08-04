@@ -21,6 +21,7 @@ type Provider struct {
 	owner    string
 	repo     string
 	workflow config.Workflow
+	native   NativeStateSyncer
 
 	actorOnce sync.Once
 	actor     string
@@ -28,14 +29,37 @@ type Provider struct {
 }
 
 func New(client Transport, owner, repo string, workflow config.Workflow) *Provider {
-	return &Provider{client: client, owner: owner, repo: repo, workflow: workflow}
+	return NewWithEnterprise(client, owner, repo, workflow, nil)
+}
+
+// NewWithEnterprise wires Open API Transport plus optional Enterprise HTTP sync.
+func NewWithEnterprise(
+	client Transport,
+	owner, repo string,
+	workflow config.Workflow,
+	enterprise *EnterpriseClient,
+) *Provider {
+	p := &Provider{
+		client:   client,
+		owner:    owner,
+		repo:     repo,
+		workflow: workflow,
+	}
+	p.native = newNativeStateSyncer(client, owner, repo, &p.workflow, enterprise)
+	return p
 }
 
 func (p *Provider) Capabilities(context.Context) provider.Capabilities {
 	access := p.client.AccessCapabilities()
+	transport := access.Transport
+	if _, ok := p.native.(*compositeNativeState); ok {
+		transport = access.Transport + "+enterprise_http"
+	} else if _, ok := p.native.(*enterpriseNativeState); ok {
+		transport = "enterprise_http"
+	}
 	return provider.Capabilities{
 		ReadIssues: true, WriteIssues: true, StrongClaimCAS: false, IdempotencyKeys: true,
-		AccessTransport: access.Transport, CredentialMode: access.CredentialMode,
+		AccessTransport: transport, CredentialMode: access.CredentialMode,
 		RefreshableCredential: access.RefreshableCredential,
 	}
 }
@@ -69,6 +93,11 @@ func (p *Provider) Check(ctx context.Context) error {
 		sort.Strings(missing)
 		return fmt.Errorf("%w: missing workflow labels: %s",
 			provider.ErrMisconfigured, strings.Join(missing, ", "))
+	}
+	if p.native != nil {
+		if err := p.native.Check(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -240,15 +269,10 @@ func (p *Provider) nativeStateNeedsSync(issue domain.Issue, state domain.Workflo
 }
 
 func (p *Provider) syncNativeState(ctx context.Context, number string, state domain.WorkflowState) error {
-	target := p.workflow.ProviderStateFor(state)
-	if target == "" {
+	if p.native == nil {
 		return nil
 	}
-	var updated issueDTO
-	_, err := p.client.Do(ctx, http.MethodPatch,
-		"/repos/"+url.PathEscape(p.owner)+"/issues/"+url.PathEscape(number), nil,
-		map[string]string{"repo": p.repo, "state": target}, &updated)
-	return err
+	return p.native.Sync(ctx, number, state)
 }
 
 func (p *Provider) hasWorkflowLabel(labels []domain.Label, state domain.WorkflowState) bool {

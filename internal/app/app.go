@@ -59,11 +59,27 @@ func OpenWithLookup(configPath, project string, lookup func(string) (string, boo
 		if token == "" {
 			return nil, fmt.Errorf("environment variable %s is not set", cfg.Provider.TokenEnv)
 		}
-		p = gitee.New(
+		var enterprise *gitee.EnterpriseClient
+		if cfg.Provider.Enterprise.Enabled {
+			entTokenEnv := cfg.Provider.Enterprise.TokenEnv
+			entToken, _ := lookup(entTokenEnv)
+			if entToken == "" {
+				return nil, fmt.Errorf("environment variable %s is not set", entTokenEnv)
+			}
+			enterprise = gitee.NewEnterpriseClient(
+				entToken,
+				cfg.Provider.Enterprise.APIBase,
+				cfg.Provider.Enterprise.ID,
+				cfg.Provider.Enterprise.Path,
+				30*time.Second,
+			)
+		}
+		p = gitee.NewWithEnterprise(
 			gitee.NewClient(token, 30*time.Second),
 			cfg.Provider.Owner,
 			cfg.Provider.Repo,
 			cfg.Workflow,
+			enterprise,
 		)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider.Type)

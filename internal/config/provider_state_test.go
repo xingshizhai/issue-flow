@@ -37,3 +37,18 @@ func TestProviderStateForPrecedence(t *testing.T) {
 		t.Fatalf("fallback claimed = %q", got)
 	}
 }
+
+func TestEnterpriseStateFor(t *testing.T) {
+	t.Parallel()
+	w := Workflow{}
+	if got := w.EnterpriseStateFor(domain.StateReview); got != "" {
+		t.Fatalf("empty map = %q", got)
+	}
+	w.EnterpriseStates = map[string]string{"review": "已修复", "working": "修复中"}
+	if got := w.EnterpriseStateFor(domain.StateReview); got != "已修复" {
+		t.Fatalf("review = %q", got)
+	}
+	if got := w.EnterpriseStateFor(domain.StateDone); got != "" {
+		t.Fatalf("done = %q", got)
+	}
+}

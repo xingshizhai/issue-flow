@@ -113,7 +113,8 @@ progress → finish → 人工审核 → complete
 | `CONFIG_ERROR` | 执行 `doctor --format json`，检查项目路径、YAML、`.env` 的 0600 权限和 `GITEE_TOKEN`。 |
 | 缺少工作流标签 | 使用仓库已有标签或请管理员创建；`doctor` 不会隐式创建标签。 |
 | Gitee 拒绝 `agent:ready` 等名称 | Gitee 标签名不允许冒号 `:`。请使用 `agent-ready` / `agent-claimed` / `agent-working` / `agent-blocked` / `agent-review` / `agent-done`（长度 2–20）。 |
-| Gitee 仍显示「待确认」等原生状态 | 开启 `workflow.sync_provider_state`（可选 `provider_states`）。claim/start/finish 会同步为 `progressing` 等；`complete`+`done` 默认同步为 `closed`。企业看板自定义状态名可能仍需企业 API 映射。 |
+| Gitee 仍显示「待确认」等原生状态 | 开启 `workflow.sync_provider_state`（可选 `provider_states`）。claim/start/finish 会同步为 `progressing` 等；`complete`+`done` 默认同步为 `closed`。 |
+| 企业看板仍是「修复中」而非「已修复」 | 开启 `provider.enterprise` + `workflow.enterprise_states`（如 `review: 已修复`），并配置 `GITEE_ENT_MCP_ACCESS_TOKEN`。项目侧只调 issue-flow，不要直连企业 MCP/API。 |
 | finish 评论看不到原因/方案 | 新版本会把 `--summary-file` 正文追加到可见评论中（HTML 事件注释仍保留）。 |
 | `LEASE_CONFLICT` | 不要抢占活动租约或猜测丢失的 Token，等待维护者在过期后 reclaim。 |
 | `RATE_LIMITED` / `PROVIDER_UNAVAILABLE` | 使用返回的 `--operation-id` 原样重试同一命令。 |

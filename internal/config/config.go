@@ -30,11 +30,22 @@ type Config struct {
 }
 
 type Provider struct {
-	Type     string `yaml:"type" json:"type"`
-	Owner    string `yaml:"owner" json:"owner"`
-	Repo     string `yaml:"repo" json:"repo"`
-	TokenEnv string `yaml:"token_env" json:"tokenEnv"`
-	DataFile string `yaml:"data_file,omitempty" json:"dataFile,omitempty"`
+	Type       string     `yaml:"type" json:"type"`
+	Owner      string     `yaml:"owner" json:"owner"`
+	Repo       string     `yaml:"repo" json:"repo"`
+	TokenEnv   string     `yaml:"token_env" json:"tokenEnv"`
+	DataFile   string     `yaml:"data_file,omitempty" json:"dataFile,omitempty"`
+	Enterprise Enterprise `yaml:"enterprise,omitempty" json:"enterprise,omitempty"`
+}
+
+// Enterprise configures optional Gitee Enterprise HTTP access used only inside
+// issue-flow (Kanban issue_state sync). Project agents must not call it directly.
+type Enterprise struct {
+	Enabled  bool   `yaml:"enabled" json:"enabled"`
+	ID       int64  `yaml:"id,omitempty" json:"id,omitempty"`
+	Path     string `yaml:"path,omitempty" json:"path,omitempty"`
+	TokenEnv string `yaml:"token_env,omitempty" json:"tokenEnv,omitempty"`
+	APIBase  string `yaml:"api_base,omitempty" json:"apiBase,omitempty"`
 }
 
 type Workflow struct {
@@ -48,6 +59,7 @@ type Workflow struct {
 	AutoClose         bool              `yaml:"auto_close" json:"autoClose"`
 	SyncProviderState bool              `yaml:"sync_provider_state" json:"syncProviderState"`
 	ProviderStates    map[string]string `yaml:"provider_states,omitempty" json:"providerStates,omitempty"`
+	EnterpriseStates  map[string]string `yaml:"enterprise_states,omitempty" json:"enterpriseStates,omitempty"`
 }
 
 type Project struct {
@@ -184,6 +196,15 @@ func normalizeProviderState(value string) string {
 	}
 }
 
+// EnterpriseStateFor returns the enterprise Kanban state title for a workflow
+// state (e.g. "已修复"). Empty means do not sync enterprise issue_state.
+func (w Workflow) EnterpriseStateFor(state domain.WorkflowState) string {
+	if w.EnterpriseStates == nil {
+		return ""
+	}
+	return strings.TrimSpace(w.EnterpriseStates[string(state)])
+}
+
 func (c Config) Validate() error {
 	if c.Version != CurrentVersion {
 		return fmt.Errorf("unsupported config version %d", c.Version)
@@ -204,6 +225,9 @@ func (c Config) Validate() error {
 		}
 		if !validGiteeTokenEnv(c.Provider.TokenEnv) {
 			return errors.New("provider.token_env must be an uppercase GITEE_*TOKEN* environment variable")
+		}
+		if err := c.Provider.Enterprise.validate(); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported provider type %q", c.Provider.Type)
@@ -239,6 +263,21 @@ func (c Config) Validate() error {
 				key,
 			)
 		}
+	}
+	for key, value := range c.Workflow.EnterpriseStates {
+		state := domain.WorkflowState(strings.TrimSpace(key))
+		switch state {
+		case domain.StateReady, domain.StateClaimed, domain.StateWorking,
+			domain.StateBlocked, domain.StateReview, domain.StateDone:
+		default:
+			return fmt.Errorf("workflow.enterprise_states has unknown workflow state %q", key)
+		}
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("workflow.enterprise_states.%s must not be empty", key)
+		}
+	}
+	if len(c.Workflow.EnterpriseStates) > 0 && !c.Provider.Enterprise.Enabled {
+		return errors.New("workflow.enterprise_states requires provider.enterprise.enabled")
 	}
 	switch c.Automation.Level {
 	case "inspect", "patch", "commit", "delivery":
@@ -294,6 +333,23 @@ func validGiteeTokenEnv(value string) bool {
 		return false
 	}
 	return true
+}
+
+func (e Enterprise) validate() error {
+	if !e.Enabled {
+		return nil
+	}
+	if e.ID <= 0 && strings.TrimSpace(e.Path) == "" {
+		return errors.New("provider.enterprise.id or provider.enterprise.path is required when enabled")
+	}
+	tokenEnv := strings.TrimSpace(e.TokenEnv)
+	if tokenEnv == "" {
+		return errors.New("provider.enterprise.token_env is required when enterprise is enabled")
+	}
+	if !validGiteeTokenEnv(tokenEnv) {
+		return errors.New("provider.enterprise.token_env must be an uppercase GITEE_*TOKEN* environment variable")
+	}
+	return nil
 }
 
 func Load(path string) (Config, error) {

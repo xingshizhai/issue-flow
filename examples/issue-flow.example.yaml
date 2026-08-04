@@ -5,6 +5,12 @@ provider:
   owner: example-owner
   repo: example-repo
   token_env: GITEE_TOKEN
+  # Optional: enterprise Kanban issue_state sync (Open API still used for labels/lease).
+  # enterprise:
+  #   enabled: true
+  #   path: example-enterprise   # or id: 12345
+  #   token_env: GITEE_ENT_MCP_ACCESS_TOKEN
+  #   api_base: https://api.gitee.com/enterprises
 
 workflow:
   # Gitee forbids ":" in label names; prefer hyphens (length 2–20).
@@ -25,6 +31,11 @@ workflow:
     blocked: open
     review: progressing
     done: closed
+  # Optional enterprise Kanban titles (requires provider.enterprise.enabled).
+  # enterprise_states:
+  #   claimed: 修复中
+  #   working: 修复中
+  #   review: 已修复
 
 project:
   instruction_files:
