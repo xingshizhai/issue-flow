@@ -855,6 +855,70 @@ func TestAdoptSetsReadyAndRejectsAlreadyManaged(t *testing.T) {
 	assertEnvelope(t, stdout, false, "STATE_CONFLICT")
 }
 
+func TestLeaseTokenFileWorksLikeInlineToken(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "fix bug", WorkflowState: domain.StateReady, Version: "1",
+	})
+	_, claimStdout, _ := invoke("claim", "1", "--agent", "codex-a", "--project", project, "--json")
+	token := leaseTokenFromEnvelope(t, claimStdout)
+	if token == "" {
+		t.Fatal("claim did not return a lease token")
+	}
+
+	tokenPath := filepath.Join(t.TempDir(), "lease-token")
+	// Trailing newline on purpose — mirrors `echo "$token" > file`, which the
+	// reader must trim.
+	if err := os.WriteFile(tokenPath, []byte(token+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := invoke("start", "1", "--agent", "codex-a", "--lease-token-file", tokenPath, "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("start code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if strings.Contains(stdout, token) {
+		t.Fatal("start output should not echo the lease token back")
+	}
+}
+
+func TestLeaseTokenAndLeaseTokenFileAreMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "fix bug", WorkflowState: domain.StateReady, Version: "1",
+	})
+	tokenPath := filepath.Join(t.TempDir(), "lease-token")
+	if err := os.WriteFile(tokenPath, []byte("whatever"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, _ := invoke("start", "1", "--agent", "codex-a",
+		"--lease-token", "inline", "--lease-token-file", tokenPath, "--project", project, "--json")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
+func TestLeaseTokenFileRejectsSymlink(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "fix bug", WorkflowState: domain.StateReady, Version: "1",
+	})
+	root := t.TempDir()
+	target := filepath.Join(root, "real-token")
+	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "lease-token-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	code, stdout, _ := invoke("start", "1", "--agent", "codex-a", "--lease-token-file", link, "--project", project, "--json")
+	if code != 2 || !strings.Contains(stdout, "symlink") {
+		t.Fatalf("code=%d stdout=%q, want a symlink rejection", code, stdout)
+	}
+}
+
 func TestCommentAddsPlainTextWithoutLease(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{

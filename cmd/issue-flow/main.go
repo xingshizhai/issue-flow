@@ -329,6 +329,7 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	flags.SetOutput(c.stderr)
 	agentID := flags.String("agent", "", "stable agent identifier")
 	leaseToken := flags.String("lease-token", "", "secret lease token returned by claim")
+	leaseTokenFile := flags.String("lease-token-file", "", "path to a file containing the secret lease token, instead of --lease-token")
 	reason := flags.String("reason", "", "release or block reason")
 	message := flags.String("message", "", "progress message")
 	summaryFile := flags.String("summary-file", "", "path to a finish summary")
@@ -342,8 +343,18 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	if command != "reclaim" && *agentID == "" {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--agent is required"), 2)
 	}
+	if *leaseToken != "" && *leaseTokenFile != "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--lease-token and --lease-token-file are mutually exclusive"), 2)
+	}
+	if *leaseTokenFile != "" {
+		fileToken, err := readLeaseTokenFile(*leaseTokenFile)
+		if err != nil {
+			return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+		}
+		*leaseToken = fileToken
+	}
 	if command != "claim" && command != "reclaim" && *leaseToken == "" {
-		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--lease-token is required"), 2)
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--lease-token or --lease-token-file is required"), 2)
 	}
 	if *requestedOperationID != "" && !validOperationID(*requestedOperationID) {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--operation-id must start with op_ and contain 1 to 64 safe characters"), 2)
@@ -432,6 +443,51 @@ func readSummaryFile(path string) (string, error) {
 		return "", fmt.Errorf("%w: summary file exceeds %d bytes", workflow.ErrInvalidInput, maximumSummarySize)
 	}
 	return string(raw), nil
+}
+
+// readLeaseTokenFile reads a lease token from a file instead of a command
+// line argument — a command's full argv (including --lease-token's value)
+// is visible to any other user on the same machine via `ps`, which sits
+// oddly next to the rule that a plaintext lease token must never be logged
+// or committed. Same TOCTOU-safe regular-file check as readSummaryFile,
+// sized for a token rather than a long-form document, and trimmed since a
+// token is typically written with a trailing newline (echo, printf).
+func readLeaseTokenFile(path string) (string, error) {
+	const maximumTokenFileSize = 4 << 10
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: read lease token file: %v", workflow.ErrInvalidInput, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%w: lease token file must be a regular file, not a symlink", workflow.ErrInvalidInput)
+	}
+	if info.Size() > maximumTokenFileSize {
+		return "", fmt.Errorf("%w: lease token file exceeds %d bytes", workflow.ErrInvalidInput, maximumTokenFileSize)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: open lease token file: %v", workflow.ErrInvalidInput, err)
+	}
+	defer file.Close()
+	openedInfo, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect opened lease token file: %v", workflow.ErrInvalidInput, err)
+	}
+	if !openedInfo.Mode().IsRegular() || !os.SameFile(info, openedInfo) {
+		return "", fmt.Errorf("%w: lease token file changed while opening", workflow.ErrInvalidInput)
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximumTokenFileSize+1))
+	if err != nil {
+		return "", fmt.Errorf("%w: read lease token file: %v", workflow.ErrInvalidInput, err)
+	}
+	if len(raw) > maximumTokenFileSize {
+		return "", fmt.Errorf("%w: lease token file exceeds %d bytes", workflow.ErrInvalidInput, maximumTokenFileSize)
+	}
+	token := strings.TrimSpace(string(raw))
+	if token == "" {
+		return "", fmt.Errorf("%w: lease token file is empty", workflow.ErrInvalidInput)
+	}
+	return token, nil
 }
 
 func (c *cli) init(g globals, args []string) int {
