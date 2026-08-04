@@ -32,6 +32,7 @@ func (s *Store) Capabilities(context.Context) provider.Capabilities {
 	return provider.Capabilities{
 		ReadIssues:      true,
 		WriteIssues:     true,
+		CommentIssues:   true,
 		StrongClaimCAS:  true,
 		IdempotencyKeys: true,
 		AccessTransport: "local",
@@ -131,6 +132,44 @@ func (s *Store) CreateIssue(ctx context.Context, input provider.CreateIssueInput
 			created.Labels = append(created.Labels, domain.Label{Name: name})
 		}
 		data.Issues = append(data.Issues, created)
+		return s.writeUnlocked(data)
+	})
+	return created, err
+}
+
+// AddComment appends a plain-text comment with no lease/state requirement.
+func (s *Store) AddComment(ctx context.Context, number, body string) (domain.Comment, error) {
+	var created domain.Comment
+	err := s.withLock(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		data, err := s.readUnlocked()
+		if err != nil {
+			return err
+		}
+		index := -1
+		for i := range data.Issues {
+			if data.Issues[i].Number == number {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			return fmt.Errorf("%w: %s", provider.ErrNotFound, number)
+		}
+		current := data.Issues[index]
+		now := time.Now().UTC()
+		created = domain.Comment{
+			ID:        strconv.Itoa(len(current.Comments) + 1),
+			Body:      body,
+			Author:    domain.Actor{ID: "fake", Login: "fake"},
+			CreatedAt: now,
+		}
+		current.Comments = append(current.Comments, created)
+		current.UpdatedAt = now
+		current.Version = nextVersion(current.Version)
+		data.Issues[index] = current
 		return s.writeUnlocked(data)
 	})
 	return created, err

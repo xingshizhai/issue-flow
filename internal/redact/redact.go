@@ -52,6 +52,11 @@ func (r Redactor) String(value string) string {
 	return value
 }
 
+func (r Redactor) Comment(comment domain.Comment) domain.Comment {
+	comment.Body = r.String(comment.Body)
+	return comment
+}
+
 func (r Redactor) Issue(issue domain.Issue) domain.Issue {
 	issue.Title = r.String(issue.Title)
 	issue.Body = r.String(issue.Body)

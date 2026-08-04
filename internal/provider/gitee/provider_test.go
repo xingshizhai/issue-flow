@@ -89,6 +89,31 @@ func TestCreateIssueMapsNativeIssueType(t *testing.T) {
 	}
 }
 
+func TestAddCommentPostsPlainBodyWithoutEventEncoding(t *testing.T) {
+	t.Parallel()
+	var postedBody map[string]string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost || r.URL.Path != "/repos/owner/repo/issues/IABC1/comments" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&postedBody); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"id":42,"body":"hello there","user":{"id":7,"login":"assistant"},"created_at":"2026-07-30T01:00:00Z"}`))
+	})
+	comment, err := testProvider(handler).AddComment(context.Background(), "IABC1", "hello there")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if postedBody["body"] != "hello there" {
+		t.Fatalf("posted body = %#v, want plain text (not an issue-flow:event wrapper)", postedBody)
+	}
+	if comment.ID != "42" || comment.Body != "hello there" || comment.Author.Login != "assistant" {
+		t.Fatalf("comment = %+v", comment)
+	}
+}
+
 func TestCheckValidatesRepositoryAndWorkflowLabels(t *testing.T) {
 	t.Parallel()
 

@@ -58,7 +58,7 @@ func (p *Provider) Capabilities(context.Context) provider.Capabilities {
 		transport = "enterprise_http"
 	}
 	return provider.Capabilities{
-		ReadIssues: true, WriteIssues: true, StrongClaimCAS: false, IdempotencyKeys: true,
+		ReadIssues: true, WriteIssues: true, CommentIssues: true, StrongClaimCAS: false, IdempotencyKeys: true,
 		AccessTransport: transport, CredentialMode: access.CredentialMode,
 		RefreshableCredential: access.RefreshableCredential,
 	}
@@ -197,6 +197,20 @@ func (p *Provider) CreateIssue(ctx context.Context, input provider.CreateIssueIn
 		return domain.Issue{}, err
 	}
 	return p.GetIssue(ctx, created.Number)
+}
+
+// AddComment posts a plain-text comment with no lease/state requirement.
+func (p *Provider) AddComment(ctx context.Context, number, body string) (domain.Comment, error) {
+	var note noteDTO
+	if _, err := p.client.Do(ctx, http.MethodPost, p.repoPath("/issues/"+url.PathEscape(number)+"/comments"), nil,
+		map[string]string{"body": body}, &note); err != nil {
+		return domain.Comment{}, err
+	}
+	return domain.Comment{
+		ID: strconv.FormatInt(note.ID, 10), Body: note.Body,
+		Author:    domain.Actor{ID: strconv.FormatInt(note.User.ID, 10), Login: note.User.Login},
+		CreatedAt: note.CreatedAt,
+	}, nil
 }
 
 func (p *Provider) UpdateIssue(ctx context.Context, number string, change provider.IssueChange, precondition provider.Precondition) (domain.Issue, error) {

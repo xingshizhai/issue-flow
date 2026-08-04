@@ -65,6 +65,8 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.doctor(ctx, g, args[1:])
 	case "create":
 		return c.create(ctx, g, args[1:])
+	case "comment":
+		return c.comment(ctx, g, args[1:])
 	case "complete":
 		return c.complete(ctx, g, args[1:])
 	case "list":
@@ -125,6 +127,8 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	title := flags.String("title", "", "issue title")
 	bodyFile := flags.String("body-file", "", "path to issue body")
 	issueType := flags.String("type", "", "bug, feature, or improvement")
+	var extraLabels stringSliceFlag
+	flags.Var(&extraLabels, "label", "extra label to attach, beyond the type/ready labels (repeatable)")
 	if err := flags.Parse(args); err != nil {
 		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
 	}
@@ -142,9 +146,18 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	if runtime == nil {
 		return code
 	}
+	labels := []string{"type-" + *issueType, runtime.Config.Workflow.ReadyLabel}
+	seen := map[string]bool{labels[0]: true, labels[1]: true}
+	for _, label := range extraLabels {
+		if seen[label] {
+			continue
+		}
+		seen[label] = true
+		labels = append(labels, label)
+	}
 	input := provider.CreateIssueInput{
 		Title: strings.TrimSpace(*title), Body: body, Type: *issueType,
-		Labels: []string{"type-" + *issueType, runtime.Config.Workflow.ReadyLabel},
+		Labels: labels,
 	}
 	if g.dryRun {
 		return c.success(g.format, input, "Would create issue: "+input.Title)
@@ -159,6 +172,42 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	}
 	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
 	return c.success(g.format, issue, fmt.Sprintf("#%s %s", issue.Number, issue.Title))
+}
+
+// comment posts a plain-text comment to an issue. Unlike claim/start/.../finish,
+// it requires no lease: it is meant for relaying a short message (e.g. from an
+// in-app assistant) without performing a workflow state transition.
+func (c *cli) comment(ctx context.Context, g globals, args []string) int {
+	if len(args) == 0 || !validIssueReference(args[0]) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("comment requires one valid issue number"), 2)
+	}
+	number := args[0]
+	flags := flag.NewFlagSet("comment", flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	body := flags.String("body", "", "comment text")
+	if err := flags.Parse(args[1:]); err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	if flags.NArg() != 0 || strings.TrimSpace(*body) == "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("comment requires --body and no extra arguments"), 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	if g.dryRun {
+		return c.success(g.format, map[string]any{"number": number, "body": *body}, "Would comment on #"+number)
+	}
+	commenter, ok := runtime.Provider.(provider.IssueCommenter)
+	if !ok {
+		return c.fail(g.format, "UNSUPPORTED_CAPABILITY", provider.ErrUnsupported, 6)
+	}
+	comment, err := commenter.AddComment(ctx, number, *body)
+	if err != nil {
+		return c.providerFailure(g.format, err)
+	}
+	comment = redact.New(runtime.Config.Security.RedactKeys).Comment(comment)
+	return c.success(g.format, comment, fmt.Sprintf("Commented on #%s", number))
 }
 
 func (c *cli) context(ctx context.Context, g globals, args []string) int {
@@ -451,6 +500,25 @@ func (c *cli) show(ctx context.Context, g globals, args []string) int {
 	return c.success(g.format, issue, text)
 }
 
+// stringSliceFlag implements flag.Value to accept a repeatable flag.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	if s == nil {
+		return ""
+	}
+	return strings.Join(*s, ",")
+}
+
+func (s *stringSliceFlag) Set(value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fmt.Errorf("--label value must not be empty")
+	}
+	*s = append(*s, trimmed)
+	return nil
+}
+
 func validIssueReference(value string) bool {
 	if len(value) < 1 || len(value) > 64 {
 		return false
@@ -582,6 +650,7 @@ Commands:
   init       Create a safe default configuration
   doctor     Validate configuration and inspect provider capabilities
   create     Create a ready bug, feature, or improvement issue
+  comment    Add a plain-text comment to an issue (no lease required)
   complete   Record human review and move a review Issue to done
   list       List issues
   show       Show one issue

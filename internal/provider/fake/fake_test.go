@@ -105,6 +105,44 @@ func TestConcurrentUpdateHasOneWinner(t *testing.T) {
 	}
 }
 
+func TestAddCommentAppendsAndPersists(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "issues.json")
+	data := fileData{Version: 1, Issues: []domain.Issue{
+		{Number: "1", Title: "first", WorkflowState: domain.StateReady, Version: "1"},
+	}}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := New(path)
+	comment, err := store.AddComment(context.Background(), "1", "hello there")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if comment.Body != "hello there" {
+		t.Fatalf("comment = %+v", comment)
+	}
+	issue, err := store.GetIssue(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issue.Comments) != 1 || issue.Comments[0].Body != "hello there" {
+		t.Fatalf("issue comments = %+v", issue.Comments)
+	}
+}
+
+func TestAddCommentNotFound(t *testing.T) {
+	t.Parallel()
+	_, err := New(filepath.Join(t.TempDir(), "missing.json")).AddComment(context.Background(), "42", "hi")
+	if !errors.Is(err, provider.ErrNotFound) {
+		t.Fatalf("AddComment() error = %v", err)
+	}
+}
+
 func TestGetIssueNotFound(t *testing.T) {
 	t.Parallel()
 	_, err := New(filepath.Join(t.TempDir(), "missing.json")).GetIssue(context.Background(), "42")

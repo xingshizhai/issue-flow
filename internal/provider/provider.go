@@ -33,6 +33,7 @@ type IssuePage struct {
 type Capabilities struct {
 	ReadIssues            bool   `json:"readIssues"`
 	WriteIssues           bool   `json:"writeIssues"`
+	CommentIssues         bool   `json:"commentIssues"`
 	StrongClaimCAS        bool   `json:"strongClaimCas"`
 	IdempotencyKeys       bool   `json:"idempotencyKeys"`
 	AccessTransport       string `json:"accessTransport"`
@@ -54,6 +55,14 @@ type CreateIssueInput struct {
 
 type IssueCreator interface {
 	CreateIssue(context.Context, CreateIssueInput) (domain.Issue, error)
+}
+
+// IssueCommenter adds a plain-text comment to an issue without requiring a
+// held lease. It is a separate capability from IssueWriter's lease-gated
+// workflow events: callers that only need to relay a message (not perform a
+// state transition) should use this instead.
+type IssueCommenter interface {
+	AddComment(ctx context.Context, number, body string) (domain.Comment, error)
 }
 
 type Precondition struct {

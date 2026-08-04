@@ -790,6 +790,82 @@ func TestCreatePersistsReadyTypedIssue(t *testing.T) {
 	}
 }
 
+func TestCreateMergesCustomLabelsAndDedupes(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	bodyPath := filepath.Join(project, "body.md")
+	if err := os.WriteFile(bodyPath, []byte("acceptance criteria"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke(
+		"create", "--type", "bug", "--title", "Add feature",
+		"--body-file", bodyPath, "--label", "priority:high", "--label", "type-bug",
+		"--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("create code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, label := range envelope.Data.Labels {
+		names = append(names, label.Name)
+	}
+	want := []string{"type-bug", "agent-ready", "priority:high"}
+	if len(names) != len(want) {
+		t.Fatalf("labels = %v, want %v", names, want)
+	}
+	for i, name := range want {
+		if names[i] != name {
+			t.Fatalf("labels = %v, want %v", names, want)
+		}
+	}
+}
+
+func TestCommentAddsPlainTextWithoutLease(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "existing", WorkflowState: domain.StateReady, Version: "1",
+	})
+	code, stdout, stderr := invoke("comment", "1", "--body", "checking in", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("comment code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Comment `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Body != "checking in" {
+		t.Fatalf("comment = %+v", envelope.Data)
+	}
+	_, showStdout, _ := invoke("show", "1", "--project", project, "--json")
+	var showEnvelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(showStdout), &showEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(showEnvelope.Data.Comments) != 1 || showEnvelope.Data.Comments[0].Body != "checking in" {
+		t.Fatalf("show comments = %+v", showEnvelope.Data.Comments)
+	}
+}
+
+func TestCommentRequiresBody(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{Number: "1", WorkflowState: domain.StateReady})
+	code, stdout, _ := invoke("comment", "1", "--project", project, "--json")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
+}
+
 func invoke(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := (&cli{stdout: &stdout, stderr: &stderr}).run(context.Background(), args)
