@@ -33,6 +33,7 @@ func (s *Store) Capabilities(context.Context) provider.Capabilities {
 		ReadIssues:      true,
 		WriteIssues:     true,
 		CommentIssues:   true,
+		AdoptIssues:     true,
 		StrongClaimCAS:  true,
 		IdempotencyKeys: true,
 		AccessTransport: "local",
@@ -173,6 +174,43 @@ func (s *Store) AddComment(ctx context.Context, number, body string) (domain.Com
 		return s.writeUnlocked(data)
 	})
 	return created, err
+}
+
+// AdoptIssue attaches the ready workflow state to an issue that has no
+// workflow state yet, without touching ProviderState.
+func (s *Store) AdoptIssue(ctx context.Context, number string) (domain.Issue, error) {
+	var adopted domain.Issue
+	err := s.withLock(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		data, err := s.readUnlocked()
+		if err != nil {
+			return err
+		}
+		index := -1
+		for i := range data.Issues {
+			if data.Issues[i].Number == number {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			return fmt.Errorf("%w: %s", provider.ErrNotFound, number)
+		}
+		current := data.Issues[index]
+		if current.WorkflowState != "" {
+			return fmt.Errorf("%w: issue %s already has workflow state %s",
+				provider.ErrPreconditionFailed, number, current.WorkflowState)
+		}
+		current.WorkflowState = domain.StateReady
+		current.UpdatedAt = time.Now().UTC()
+		current.Version = nextVersion(current.Version)
+		data.Issues[index] = current
+		adopted = current
+		return s.writeUnlocked(data)
+	})
+	return adopted, err
 }
 
 func (s *Store) read() (fileData, error) {

@@ -826,6 +826,35 @@ func TestCreateMergesCustomLabelsAndDedupes(t *testing.T) {
 	}
 }
 
+func TestAdoptSetsReadyAndRejectsAlreadyManaged(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		Number: "1", Title: "unmanaged", Version: "1",
+	}, domain.Issue{
+		Number: "2", Title: "already ready", WorkflowState: domain.StateReady, Version: "1",
+	})
+
+	code, stdout, stderr := invoke("adopt", "1", "--project", project, "--json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("adopt code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.WorkflowState != domain.StateReady {
+		t.Fatalf("workflowState = %s, want ready", envelope.Data.WorkflowState)
+	}
+
+	code, stdout, _ = invoke("adopt", "2", "--project", project, "--json")
+	if code != 5 {
+		t.Fatalf("code = %d, want 5 (STATE_CONFLICT)", code)
+	}
+	assertEnvelope(t, stdout, false, "STATE_CONFLICT")
+}
+
 func TestCommentAddsPlainTextWithoutLease(t *testing.T) {
 	t.Parallel()
 	project := seededProject(t, domain.Issue{

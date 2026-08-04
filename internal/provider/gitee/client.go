@@ -127,7 +127,7 @@ func (c *Client) doOnce(ctx context.Context, method, endpoint string, rawBody []
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, context.DeadlineExceeded
 		}
-		return nil, fmt.Errorf("%w: request failed", provider.ErrUnavailable)
+		return nil, fmt.Errorf("%w: request failed: %s", provider.ErrUnavailable, redactTransportError(err))
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -146,6 +146,31 @@ func (c *Client) doOnce(ctx context.Context, method, endpoint string, rawBody []
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, target any) (*http.Response, error) {
 	return c.Do(ctx, method, path, query, body, target)
+}
+
+// redactTransportError extracts a safe, diagnosable message from a failed
+// http.Client.Do call. Go wraps RoundTripper errors in *url.Error, whose
+// Error() text embeds the full request URL (query string and all) ahead of
+// the actual cause — unwrapping to the inner error drops that redundant
+// URL for normal transport failures (dial/proxy/TLS errors, which don't
+// themselves reference the URL). As a second line of defense against a
+// RoundTripper that embeds the URL directly in its own error text, any
+// remaining URL-shaped substring has its query string stripped before the
+// standard key-based redaction runs — a partial redaction like
+// "access_token=[REDACTED]" is not good enough for an error message that
+// may end up in logs or CLI output outside the normal Issue-text path.
+func redactTransportError(err error) string {
+	detail := err.Error()
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		detail = urlErr.Err.Error()
+	}
+	if idx := strings.Index(detail, "://"); idx >= 0 {
+		if q := strings.IndexByte(detail, '?'); q >= 0 {
+			detail = detail[:q]
+		}
+	}
+	return redact.New(nil).String(detail)
 }
 
 func cloneValues(values url.Values) url.Values {

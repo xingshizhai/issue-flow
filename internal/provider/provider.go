@@ -34,6 +34,7 @@ type Capabilities struct {
 	ReadIssues            bool   `json:"readIssues"`
 	WriteIssues           bool   `json:"writeIssues"`
 	CommentIssues         bool   `json:"commentIssues"`
+	AdoptIssues           bool   `json:"adoptIssues"`
 	StrongClaimCAS        bool   `json:"strongClaimCas"`
 	IdempotencyKeys       bool   `json:"idempotencyKeys"`
 	AccessTransport       string `json:"accessTransport"`
@@ -63,6 +64,17 @@ type IssueCreator interface {
 // state transition) should use this instead.
 type IssueCommenter interface {
 	AddComment(ctx context.Context, number, body string) (domain.Comment, error)
+}
+
+// IssueAdopter brings an issue that was created outside issue-flow (no
+// workflow label at all) under management by attaching the ready label —
+// the same starting point CreateIssue gives a brand-new issue. It must fail
+// with ErrPreconditionFailed if the issue already carries a workflow label,
+// so a caller can't silently clobber an issue someone else is already
+// working. Unlike CreateIssue, this never touches the issue's native
+// provider state.
+type IssueAdopter interface {
+	AdoptIssue(ctx context.Context, number string) (domain.Issue, error)
 }
 
 type Precondition struct {

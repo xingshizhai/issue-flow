@@ -67,6 +67,8 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.create(ctx, g, args[1:])
 	case "comment":
 		return c.comment(ctx, g, args[1:])
+	case "adopt":
+		return c.adopt(ctx, g, args[1:])
 	case "complete":
 		return c.complete(ctx, g, args[1:])
 	case "list":
@@ -208,6 +210,43 @@ func (c *cli) comment(ctx context.Context, g globals, args []string) int {
 	}
 	comment = redact.New(runtime.Config.Security.RedactKeys).Comment(comment)
 	return c.success(g.format, comment, fmt.Sprintf("Commented on #%s", number))
+}
+
+// adopt brings an issue that was created outside issue-flow (no workflow
+// label at all — e.g. filed by other tooling, or predating issue-flow's
+// adoption in this repo) under management by attaching the ready label. It
+// fails with STATE_CONFLICT if the issue already has a workflow label,
+// rather than silently reinterpreting whatever state it's already in.
+func (c *cli) adopt(ctx context.Context, g globals, args []string) int {
+	if len(args) == 0 || !validIssueReference(args[0]) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("adopt requires one valid issue number"), 2)
+	}
+	number := args[0]
+	flags := flag.NewFlagSet("adopt", flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	if err := flags.Parse(args[1:]); err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	if flags.NArg() != 0 {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("adopt accepts only one issue number"), 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	if g.dryRun {
+		return c.success(g.format, map[string]any{"number": number}, "Would adopt #"+number)
+	}
+	adopter, ok := runtime.Provider.(provider.IssueAdopter)
+	if !ok {
+		return c.fail(g.format, "UNSUPPORTED_CAPABILITY", provider.ErrUnsupported, 6)
+	}
+	issue, err := adopter.AdoptIssue(ctx, number)
+	if err != nil {
+		return c.providerFailure(g.format, err)
+	}
+	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
+	return c.success(g.format, issue, fmt.Sprintf("#%s adopted into ready", issue.Number))
 }
 
 func (c *cli) context(ctx context.Context, g globals, args []string) int {
@@ -585,6 +624,8 @@ func (c *cli) providerFailureWithID(format, operationID string, err error) int {
 		return c.failWithIDRetryable(format, operationID, "RATE_LIMITED", err, 6, true)
 	case errors.Is(err, provider.ErrUnsupported):
 		return c.failWithIDRetryable(format, operationID, "UNSUPPORTED_CAPABILITY", err, 6, false)
+	case errors.Is(err, provider.ErrPreconditionFailed):
+		return c.failWithIDRetryable(format, operationID, "STATE_CONFLICT", err, 5, false)
 	default:
 		return c.failWithIDRetryable(format, operationID, "PROVIDER_UNAVAILABLE", err, 6, true)
 	}
@@ -650,6 +691,7 @@ Commands:
   init       Create a safe default configuration
   doctor     Validate configuration and inspect provider capabilities
   create     Create a ready bug, feature, or improvement issue
+  adopt      Bring an unmanaged issue (no workflow label) into ready
   comment    Add a plain-text comment to an issue (no lease required)
   complete   Record human review and move a review Issue to done
   list       List issues

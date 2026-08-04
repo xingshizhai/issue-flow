@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -111,6 +112,68 @@ func TestAddCommentPostsPlainBodyWithoutEventEncoding(t *testing.T) {
 	}
 	if comment.ID != "42" || comment.Body != "hello there" || comment.Author.Login != "assistant" {
 		t.Fatalf("comment = %+v", comment)
+	}
+}
+
+func TestAdoptIssueAttachesReadyLabelToUnmanagedIssue(t *testing.T) {
+	t.Parallel()
+	var putBody []string
+	adopted := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo/issues/IABC1":
+			labels := `[{"name":"bug"}]`
+			if adopted {
+				labels = `[{"name":"bug"},{"name":"agent-ready"}]`
+			}
+			fmt.Fprintf(w, `{
+				"id":10,"number":"IABC1","title":"unmanaged","body":"details","state":"open",
+				"html_url":"https://gitee.test/owner/repo/issues/IABC1",
+				"labels":%s,
+				"created_at":"2026-07-30T01:00:00Z","updated_at":"2026-07-30T02:00:00Z"
+			}`, labels)
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo/issues/IABC1/comments":
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodPut && r.URL.Path == "/repos/owner/repo/issues/IABC1/labels":
+			if err := json.NewDecoder(r.Body).Decode(&putBody); err != nil {
+				t.Fatal(err)
+			}
+			adopted = true
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	issue, err := testProvider(handler).AdoptIssue(context.Background(), "IABC1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.WorkflowState != domain.StateReady {
+		t.Fatalf("workflow state = %s, want ready", issue.WorkflowState)
+	}
+	sort.Strings(putBody)
+	if len(putBody) != 2 || putBody[0] != "agent-ready" || putBody[1] != "bug" {
+		t.Fatalf("PUT labels = %v, want [agent-ready bug]", putBody)
+	}
+}
+
+func TestAdoptIssueRejectsAlreadyManagedIssue(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1":
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1/comments":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := testProvider(handler).AdoptIssue(context.Background(), "IABC1")
+	if !errors.Is(err, provider.ErrPreconditionFailed) {
+		t.Fatalf("error = %v, want ErrPreconditionFailed", err)
 	}
 }
 

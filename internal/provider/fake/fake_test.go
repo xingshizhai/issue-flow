@@ -143,6 +143,63 @@ func TestAddCommentNotFound(t *testing.T) {
 	}
 }
 
+func TestAdoptIssueSetsReadyState(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "issues.json")
+	data := fileData{Version: 1, Issues: []domain.Issue{
+		{Number: "1", Title: "unmanaged", Version: "1"},
+	}}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := New(path)
+	adopted, err := store.AdoptIssue(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted.WorkflowState != domain.StateReady {
+		t.Fatalf("workflow state = %s, want ready", adopted.WorkflowState)
+	}
+	issue, err := store.GetIssue(context.Background(), "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.WorkflowState != domain.StateReady {
+		t.Fatalf("persisted workflow state = %s, want ready", issue.WorkflowState)
+	}
+}
+
+func TestAdoptIssueRejectsAlreadyManaged(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "issues.json")
+	data := fileData{Version: 1, Issues: []domain.Issue{
+		{Number: "1", Title: "already managed", WorkflowState: domain.StateWorking, Version: "1"},
+	}}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = New(path).AdoptIssue(context.Background(), "1")
+	if !errors.Is(err, provider.ErrPreconditionFailed) {
+		t.Fatalf("error = %v, want ErrPreconditionFailed", err)
+	}
+}
+
+func TestAdoptIssueNotFound(t *testing.T) {
+	t.Parallel()
+	_, err := New(filepath.Join(t.TempDir(), "missing.json")).AdoptIssue(context.Background(), "42")
+	if !errors.Is(err, provider.ErrNotFound) {
+		t.Fatalf("AdoptIssue() error = %v", err)
+	}
+}
+
 func TestGetIssueNotFound(t *testing.T) {
 	t.Parallel()
 	_, err := New(filepath.Join(t.TempDir(), "missing.json")).GetIssue(context.Background(), "42")
