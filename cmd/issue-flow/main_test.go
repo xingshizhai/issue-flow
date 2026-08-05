@@ -474,18 +474,26 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	issue := envelope.Data.Issue
-	if issue.WorkflowState != domain.StateReview || issue.Lease != nil {
+	if issue.WorkflowState != domain.StateDone || issue.Lease != nil {
 		t.Fatalf("finish result = %+v", issue)
 	}
 	if got := issue.Events[len(issue.Events)-1]; got.Operation != "finish" ||
 		!strings.Contains(got.Message, "All checks passed") {
 		t.Fatalf("finish event = %+v", got)
 	}
+}
+
+func TestCompleteMovesReviewToDone(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "awaiting review", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateReview, Version: "1", CreatedAt: time.Now().UTC(),
+	})
 	conclusionPath := filepath.Join(project, "review.md")
 	if err := os.WriteFile(conclusionPath, []byte("Reviewed and accepted."), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr = invoke(
+	code, stdout, stderr := invoke(
 		"complete", "1", "--reviewer", "reviewer-a",
 		"--conclusion-file", conclusionPath, "--operation-id", "op_review_complete",
 		"--project", project, "--json",
@@ -493,10 +501,15 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("complete code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
+	var envelope struct {
+		Data struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
 	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	issue = envelope.Data.Issue
+	issue := envelope.Data.Issue
 	if issue.WorkflowState != domain.StateDone || issue.Lease != nil {
 		t.Fatalf("complete result = %+v", issue)
 	}
@@ -511,6 +524,12 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 	)
 	if code != 0 || stderr != "" {
 		t.Fatalf("complete replay code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Issue.WorkflowState != domain.StateDone {
+		t.Fatalf("complete replay result = %+v", envelope.Data.Issue)
 	}
 }
 

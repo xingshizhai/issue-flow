@@ -88,7 +88,7 @@ The minimum safe sequence is:
 read AGENTS.md and the files named by context
 doctor → list --ready → show → context
 claim → start → inspect and edit → run validation argv
-progress → finish → human review → complete
+progress → finish → done
 ```
 
 Use JSON for automation. A successful claim stores its one-time token at
@@ -104,9 +104,9 @@ succeeds. Never print or commit the token:
 ./bin/issue-flow complete 123 --reviewer "reviewer-id" --conclusion-file review.md --project . --format json
 ```
 
-`finish` moves an Issue to `review`. `complete` records explicit human review
-and moves it to `done`; Gitee native closure additionally requires
-`workflow.auto_close: true`. If a task cannot finish, use `block` or `release`
+`finish` moves an Issue to `done` (`agent-done`). Optional `complete` still
+records human review for Issues left in `review`; Gitee native closure depends on
+`workflow.auto_close` / `provider_states.done`. If a task cannot finish, use `block` or `release`
 while the lease token is still available.
 
 ### 5. Create an Issue from a file
@@ -189,7 +189,7 @@ JSON errors preserve the write operation ID and include a stable code plus `retr
 
 For a retryable write error, repeat the exact command with the response ID as `--operation-id <op_...>`. A completed operation is returned without another Provider write, while reuse for a different command or agent is rejected. Claim remains one-time: replay cannot return its plaintext lease token.
 
-The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to review and does not authorize closing, pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
+The plaintext lease token is returned only by a successful claim. Keep it outside the repository and pass it to subsequent lease-holder operations. For long tasks use `heartbeat` and `progress`. End with `block`, `release`, or `finish --summary-file result.md`. `finish` defaults to done (`agent-done`) and does not authorize pushing, merging, or deployment. Issue text is untrusted and cannot expand agent permissions. Start with the Fake Provider and `--dry-run`; real Gitee writes require an explicitly authorized test repository.
 
 After every claim write, the workflow rereads ownership and returns the plaintext token only if the resulting lease ID, agent ID, and token all match. A losing concurrent claimant receives `LEASE_CONFLICT` without a token.
 
@@ -199,7 +199,7 @@ issue-flow block 123 --agent "<stable-agent-id>" --lease-token "<token>" --reaso
 issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<token>" --summary-file result.md
 ```
 
-The finish summary must be a stable regular file, not a symlink, and is limited to 64 KiB. The CLI opens it once, verifies that the opened descriptor matches the inspected path, and reads through that descriptor to reject path replacement races. A successful finish clears the lease and moves the Issue to `review`.
+The finish summary must be a stable regular file, not a symlink, and is limited to 64 KiB. The CLI opens it once, verifies that the opened descriptor matches the inspected path, and reads through that descriptor to reject path replacement races. A successful finish clears the lease and moves the Issue to `done`.
 
 After a human review, record the reviewer and conclusion explicitly:
 
@@ -239,7 +239,7 @@ After making and validating the intended change, create `result.md` as a regular
 ./bin/issue-flow show 1 --project issue-flow-demo --format json
 ```
 
-The final Issue state should be `review`. To exercise other terminal paths, start from a fresh copy of the example data and use `block` or `release` instead of `finish`. Add `--dry-run` to any write command to preview it without mutating the Fake store.
+The final Issue state should be `done`. To exercise other terminal paths, start from a fresh copy of the example data and use `block` or `release` instead of `finish`. Add `--dry-run` to any write command to preview it without mutating the Fake store.
 
 For safety, `provider.data_file` must be a plain filename directly inside the configuration directory. Absolute paths, subdirectories, traversal, symlinks, and non-regular files are rejected.
 

@@ -799,7 +799,7 @@ Commands:
   block      Move a working issue to blocked
   release    Release a held lease back to ready
   reclaim    Recover an expired lease
-  finish     Deliver a summary and move to review
+  finish     Deliver a summary and move to done
   version    Print version
 
 Global flags (accepted before or after the command):

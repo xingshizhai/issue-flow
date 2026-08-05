@@ -157,7 +157,7 @@ func (s *Service) Finish(ctx context.Context, number, agentID, token, operationI
 	if strings.TrimSpace(summary) == "" {
 		return Result{}, fmt.Errorf("%w: finish summary is required", ErrInvalidInput)
 	}
-	return s.holderTransition(ctx, number, agentID, token, operationID, "finish", domain.StateReview, summary, true, dryRun)
+	return s.holderTransition(ctx, number, agentID, token, operationID, "finish", domain.StateDone, summary, true, dryRun)
 }
 
 func (s *Service) Complete(ctx context.Context, number, reviewerID, operationID, conclusion string, dryRun bool) (Result, error) {

@@ -575,7 +575,7 @@ init → doctor → list → claim → start → progress → finish
 | 核心形态 | CLI + library，不做模型绑定 Agent |
 | 首个 Provider | Gitee |
 | 推荐语言 | Go |
-| 默认交付状态 | `agent-review` |
+| 默认交付状态 | `agent-done` |
 | 自动关闭 | 默认关闭 |
 | 自动推送 | 默认关闭 |
 | 锁机制 | 标签 + 版本化租约事件 + 冲突收敛 |

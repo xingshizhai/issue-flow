@@ -14,8 +14,10 @@ var ErrInvalidTransition = errors.New("invalid workflow state transition")
 var transitions = map[WorkflowState]map[WorkflowState]bool{
 	StateReady:   {StateClaimed: true},
 	StateClaimed: {StateWorking: true, StateReady: true},
-	StateWorking: {StateReview: true, StateBlocked: true, StateReady: true},
-	StateBlocked: {StateReady: true, StateReview: true},
+	// finish lands on done (agent-done). review remains for optional human
+	// complete on older issues still waiting for review.
+	StateWorking: {StateDone: true, StateReview: true, StateBlocked: true, StateReady: true},
+	StateBlocked: {StateReady: true, StateDone: true, StateReview: true},
 	StateReview:  {StateDone: true, StateWorking: true},
 }
 

@@ -72,15 +72,17 @@ Agent 可以将任务标记为阻塞或释放租约。Agent 异常退出后，�
 | `claimed` | `agent-claimed` | 已获得有效租约，尚未开始或刚开始 |
 | `working` | `agent-working` | Agent 正在开发 |
 | `blocked` | `agent-blocked` | 缺少信息、权限或外部条件 |
-| `review` | `agent-review` | 开发和验证完成，等待审核 |
-| `done` | `agent-done` | 已被确认完成 |
+| `review` | `agent-review` | 可选人工审核（遗留路径；`finish` 默认不再进入） |
+| `done` | `agent-done` | Agent 交付完成（`finish` 默认终点） |
 
 ### 5.2 合法转换
 
 ```text
-ready → claimed → working → review → done
-                    │          │
+ready → claimed → working → done
+                    │          ↑
                     └→ blocked ┘
+                    │
+                    └→ review → done   （可选人工审核 / 遗留）
 
 claimed/working/blocked → ready    释放或租约回收
 review → working                  审核退回

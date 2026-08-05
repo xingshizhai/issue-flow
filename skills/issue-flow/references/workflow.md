@@ -73,7 +73,7 @@ Create a concise summary containing changes, validation results, limitations, an
 issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<claim-token>" --summary-file result.md --format json
 ```
 
-`finish` moves the Issue to review. It does not close the Issue or authorize push, merge, or deployment.
+`finish` moves the Issue to done (`agent-done`). It does not authorize push, merge, or deployment. Optional `complete` remains for Issues still in `review`.
 
 If work cannot finish, choose exactly one terminal action for the held lease:
 

@@ -80,7 +80,7 @@ chmod 600 .env .issue-flow.yaml
 读取 AGENTS.md 及 context 列出的指令文件
 doctor → list --ready → show → context
 claim → start → 检查和修改代码 → 按 validation argv 测试
-progress → finish → 人工审核 → complete
+progress → finish → done
 ```
 
 成功 claim 的一次性 Token 位于 `data.leaseToken`，Issue 位于 `data.issue`，
@@ -94,8 +94,9 @@ progress → finish → 人工审核 → complete
 ./bin/issue-flow complete 123 --reviewer "reviewer-id" --conclusion-file review.md --project . --format json
 ```
 
-`finish` 将 Issue 转为 `review`；`complete` 记录人工审核并转为 `done`。
-只有显式设置 `workflow.auto_close: true` 时，Gitee 原生状态才会同步关闭。
+`finish` 将 Issue 转为 `done`（`agent-done`）。可选的 `complete` 仍可将遗留在
+`review` 的 Issue 转为 `done`。Gitee 原生关闭取决于 `workflow.auto_close` /
+`provider_states.done`。
 
 ### 5. 从文件创建 Issue
 
@@ -185,7 +186,7 @@ issue-flow block 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --re
 issue-flow finish 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --summary-file result.md
 ```
 
-交付摘要必须是稳定的普通文件，不能是符号链接，且最大为 64 KiB。CLI 只打开一次，并确认打开的文件描述符与检查过的路径指向同一文件，再通过该描述符读取，以拒绝路径替换竞态。`finish` 成功后清除租约并将 Issue 转为 `review`。
+交付摘要必须是稳定的普通文件，不能是符号链接，且最大为 64 KiB。CLI 只打开一次，并确认打开的文件描述符与检查过的路径指向同一文件，再通过该描述符读取，以拒绝路径替换竞态。`finish` 成功后清除租约并将 Issue 转为 `done`。
 
 人工审核后，必须显式记录审核人和审核结论：
 
@@ -224,7 +225,7 @@ cp examples/fake-issues.example.json issue-flow-demo/.issue-flow-fake.json
 ./bin/issue-flow show 1 --project issue-flow-demo --format json
 ```
 
-最终 Issue 状态应为 `review`。如需演练其他结束路径，请重新复制示例数据，并以 `block` 或 `release` 代替 `finish`。任何写命令均可增加 `--dry-run`，在不修改 Fake 存储的情况下预览结果。
+最终 Issue 状态应为 `done`。如需演练其他结束路径，请重新复制示例数据，并以 `block` 或 `release` 代替 `finish`。任何写命令均可增加 `--dry-run`，在不修改 Fake 存储的情况下预览结果。
 
 出于安全考虑，`provider.data_file` 必须是配置目录内的普通文件名。绝对路径、子目录、路径穿越、符号链接和非普通文件都会被拒绝。
 
