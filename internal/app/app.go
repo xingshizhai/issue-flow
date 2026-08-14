@@ -102,13 +102,13 @@ func (r *Runtime) Context(ctx context.Context, number string) (projectcontext.Co
 }
 
 type DoctorResult struct {
-	ConfigPath     string                `json:"configPath"`
-	ProviderType   string                `json:"providerType"`
-	TokenEnv       string                `json:"tokenEnv,omitempty"`
-	TokenSet       bool                  `json:"tokenSet"`
-	Capabilities   provider.Capabilities `json:"capabilities"`
-	EnterpriseOK   *bool                 `json:"enterpriseOk,omitempty"`
-	EnterpriseErr  string                `json:"enterpriseError,omitempty"`
+	ConfigPath    string                `json:"configPath"`
+	ProviderType  string                `json:"providerType"`
+	TokenEnv      string                `json:"tokenEnv,omitempty"`
+	TokenSet      bool                  `json:"tokenSet"`
+	Capabilities  provider.Capabilities `json:"capabilities"`
+	EnterpriseOK  *bool                 `json:"enterpriseOk,omitempty"`
+	EnterpriseErr string                `json:"enterpriseError,omitempty"`
 }
 
 func (r *Runtime) Doctor(ctx context.Context) (DoctorResult, error) {

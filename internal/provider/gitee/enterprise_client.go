@@ -24,10 +24,10 @@ type EnterpriseClient struct {
 	token      string
 	httpClient *http.Client
 
-	mu            sync.Mutex
-	enterpriseID  int64
-	pathHint      string
-	stateCache    map[int]map[string]int // issueTypeID -> title -> stateID
+	mu           sync.Mutex
+	enterpriseID int64
+	pathHint     string
+	stateCache   map[int]map[string]int // issueTypeID -> title -> stateID
 }
 
 func NewEnterpriseClient(token, apiBase string, enterpriseID int64, path string, timeout time.Duration) *EnterpriseClient {
@@ -83,7 +83,7 @@ func (c *EnterpriseClient) Check(ctx context.Context) error {
 }
 
 type enterpriseIssueDetail struct {
-	Ident string `json:"ident"`
+	Ident     string `json:"ident"`
 	IssueType *struct {
 		ID    int    `json:"id"`
 		Title string `json:"title"`
