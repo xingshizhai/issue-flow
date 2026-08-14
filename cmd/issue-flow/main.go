@@ -294,7 +294,7 @@ func (c *cli) context(ctx context.Context, g globals, args []string) int {
 	}
 	result, err := runtime.Context(ctx, args[0])
 	if err != nil {
-		if errors.Is(err, provider.ErrNotFound) {
+		if isProviderError(err) {
 			return c.providerFailure(g.format, err)
 		}
 		return c.fail(g.format, "CONFIG_ERROR", err, 2)
@@ -329,6 +329,22 @@ func (c *cli) context(ctx context.Context, g globals, args []string) int {
 	fmt.Fprintf(c.stdout, "\n## Git policy\n- commit: %t\n- push: %t\n- pull request: %t\n",
 		result.Git.AllowCommit, result.Git.AllowPush, result.Git.AllowPullRequest)
 	return 0
+}
+
+// isProviderError keeps context's two failure domains separate: fetching the
+// Issue can fail at the remote Provider, while building the local project
+// context can fail because of project configuration or filesystem policy.
+// Provider failures must retain the same stable code/retryability as show/list
+// instead of being flattened into CONFIG_ERROR.
+func isProviderError(err error) bool {
+	return errors.Is(err, provider.ErrAuthentication) ||
+		errors.Is(err, provider.ErrPermission) ||
+		errors.Is(err, provider.ErrNotFound) ||
+		errors.Is(err, provider.ErrMisconfigured) ||
+		errors.Is(err, provider.ErrRateLimited) ||
+		errors.Is(err, provider.ErrUnsupported) ||
+		errors.Is(err, provider.ErrPreconditionFailed) ||
+		errors.Is(err, provider.ErrUnavailable)
 }
 
 func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args []string) int {

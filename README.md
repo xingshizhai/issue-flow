@@ -10,6 +10,8 @@ Run `make check` before submitting changes. It checks formatting, unit and integ
 
 Create unsigned local snapshot binaries with `make snapshot VERSION=0.1.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts.
 
+Files under `dist/` are ignored local outputs and may be older than the checked-out source. After pulling configuration or CLI changes, rebuild them with `make snapshot` and run `make verify-dist`; development automation should prefer a binary freshly built from the current checkout.
+
 SemVer tags matching `vX.Y.Z` trigger the GitHub release workflow after checks pass. It publishes those binaries and checksums and generates GitHub artifact attestations.
 
 ## Install

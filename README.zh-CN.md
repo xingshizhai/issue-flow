@@ -10,6 +10,8 @@ Issue Flow 为代码开发 Agent 提供确定性的自动化工作流，用于�
 
 运行 `make snapshot VERSION=0.1.0-dev` 可生成未签名的本地快照：`dist/` 下包含经过 `-trimpath` 构建的 Linux amd64、macOS arm64、Windows amd64 二进制和 `checksums.txt`。该命令不会发布或签名产物。
 
+`dist/` 下的文件是被忽略的本地构建产物，可能早于当前检出的源码。拉取配置结构或 CLI 变更后，请执行 `make snapshot` 重新生成，再执行 `make verify-dist` 检查兼容性；开发自动化应优先使用从当前 checkout 新构建的二进制。
+
 推送符合 `vX.Y.Z` 的 Git 标签后，GitHub release 工作流会在检查通过后发布这些二进制与校验和，并生成 GitHub artifact attestation。
 
 ## 安装

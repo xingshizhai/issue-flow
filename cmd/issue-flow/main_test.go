@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -723,6 +724,22 @@ workflow:
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	assertEnvelope(t, stdout, false, "NOT_FOUND")
+}
+
+func TestIsProviderError(t *testing.T) {
+	t.Parallel()
+	for _, sentinel := range []error{
+		provider.ErrAuthentication, provider.ErrPermission, provider.ErrNotFound,
+		provider.ErrMisconfigured, provider.ErrRateLimited, provider.ErrUnsupported,
+		provider.ErrPreconditionFailed, provider.ErrUnavailable,
+	} {
+		if !isProviderError(fmt.Errorf("wrapped: %w", sentinel)) {
+			t.Errorf("expected %v to be classified as a provider error", sentinel)
+		}
+	}
+	if isProviderError(errors.New("instruction path escapes project root")) {
+		t.Error("local project-context failure must not be classified as a provider error")
+	}
 }
 
 func TestContextJSONIncludesSafeProjectPolicy(t *testing.T) {
