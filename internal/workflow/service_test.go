@@ -142,3 +142,24 @@ func TestAppliedClaimCannotReturnOneTimeTokenAgain(t *testing.T) {
 		t.Fatalf("result = %+v, error = %v", result, err)
 	}
 }
+
+func TestFinishStateCanBeConfiguredToDone(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	token := "holder-token"
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateWorking, Version: "1",
+		Lease: &domain.Lease{ID: "lease_1", AgentID: "agent-a", TokenHash: domain.HashLeaseToken(token), ClaimedAt: now, HeartbeatAt: now, ExpiresAt: now.Add(time.Hour)},
+	}
+	winner := current
+	winner.WorkflowState = domain.StateDone
+	winner.Lease = nil
+	service := New(claimRaceProvider{ready: current, winner: winner}, clock.Fixed{Time: now}, time.Hour).WithFinishState(domain.StateDone)
+	result, err := service.Finish(context.Background(), "1", "agent-a", token, "op_finish_done", "delivered", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Issue.WorkflowState != domain.StateDone {
+		t.Fatalf("result = %+v", result)
+	}
+}

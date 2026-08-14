@@ -9,6 +9,7 @@ import (
 
 	"github.com/xingshizhai/issue-flow/internal/clock"
 	"github.com/xingshizhai/issue-flow/internal/config"
+	"github.com/xingshizhai/issue-flow/internal/domain"
 	"github.com/xingshizhai/issue-flow/internal/projectcontext"
 	"github.com/xingshizhai/issue-flow/internal/provider"
 	"github.com/xingshizhai/issue-flow/internal/provider/fake"
@@ -30,7 +31,7 @@ func (r *Runtime) Workflow() *workflow.Service {
 		clock.Real{},
 		time.Duration(r.Config.Workflow.LeaseMinutes)*time.Minute,
 		r.Config.Security.RedactKeys,
-	)
+	).WithFinishState(domain.WorkflowState(r.Config.Workflow.FinishState))
 }
 
 func Open(configPath, project string) (*Runtime, error) {

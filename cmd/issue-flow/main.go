@@ -17,12 +17,18 @@ import (
 	"github.com/xingshizhai/issue-flow/internal/domain"
 	"github.com/xingshizhai/issue-flow/internal/envfile"
 	"github.com/xingshizhai/issue-flow/internal/output"
+	"github.com/xingshizhai/issue-flow/internal/projectcontext"
 	"github.com/xingshizhai/issue-flow/internal/provider"
 	"github.com/xingshizhai/issue-flow/internal/redact"
 	"github.com/xingshizhai/issue-flow/internal/workflow"
 )
 
-var version = "0.1.0-dev"
+var (
+	version     = "0.1.0-dev"
+	buildCommit = "unknown"
+)
+
+const workflowProtocolVersion = 2
 
 type cli struct {
 	stdout io.Writer
@@ -57,8 +63,9 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		c.usage(c.stdout)
 		return 0
 	case "version", "--version":
-		fmt.Fprintln(c.stdout, version)
-		return 0
+		return c.versionInfo(g)
+	case "capabilities":
+		return c.capabilities(g)
 	case "init":
 		return c.init(g, args[1:])
 	case "doctor":
@@ -82,6 +89,44 @@ func (c *cli) run(ctx context.Context, args []string) int {
 	default:
 		return c.fail(g.format, "INVALID_ARGUMENT", fmt.Errorf("unknown command %q", args[0]), 2)
 	}
+}
+
+type buildInfo struct {
+	Version                 string   `json:"version"`
+	Commit                  string   `json:"commit"`
+	ConfigSchemaVersion     int      `json:"configSchemaVersion"`
+	OutputSchemaVersion     int      `json:"outputSchemaVersion"`
+	WorkflowProtocolVersion int      `json:"workflowProtocolVersion"`
+	Features                []string `json:"features"`
+}
+
+func currentBuildInfo() buildInfo {
+	return buildInfo{
+		Version: version, Commit: buildCommit,
+		ConfigSchemaVersion: config.CurrentVersion, OutputSchemaVersion: output.SchemaVersion,
+		WorkflowProtocolVersion: workflowProtocolVersion,
+		Features: []string{
+			"configurable-finish-state", "delivery-evidence", "external-attachment-refs",
+			"create-extra-labels", "comment-body-file", "provider-state-sync",
+		},
+	}
+}
+
+func (c *cli) versionInfo(g globals) int {
+	info := currentBuildInfo()
+	return c.success(g.format, info, info.Version)
+}
+
+func (c *cli) capabilities(g globals) int {
+	info := currentBuildInfo()
+	data := struct {
+		Commands []string `json:"commands"`
+		Features []string `json:"features"`
+	}{
+		Commands: []string{"init", "doctor", "create", "comment", "adopt", "complete", "list", "show", "context", "claim", "start", "heartbeat", "progress", "block", "release", "reclaim", "finish", "version", "capabilities"},
+		Features: info.Features,
+	}
+	return c.success(g.format, data, strings.Join(data.Features, "\n"))
 }
 
 func (c *cli) complete(ctx context.Context, g globals, args []string) int {
@@ -363,6 +408,8 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 	reason := flags.String("reason", "", "release or block reason")
 	message := flags.String("message", "", "progress message")
 	summaryFile := flags.String("summary-file", "", "path to a finish summary")
+	commit := flags.String("commit", "", "commit delivered by finish (must resolve to HEAD)")
+	validationReport := flags.String("validation-report", "", "path to structured validation evidence JSON")
 	requestedOperationID := flags.String("operation-id", "", "stable operation ID for retry correlation")
 	if err := flags.Parse(args[1:]); err != nil {
 		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
@@ -419,7 +466,11 @@ func (c *cli) leaseCommand(ctx context.Context, g globals, command string, args 
 		var summary string
 		summary, err = readSummaryFile(*summaryFile)
 		if err == nil {
-			result, err = service.Finish(ctx, number, *agentID, *leaseToken, opID, summary, g.dryRun)
+			var evidence *domain.DeliveryEvidence
+			evidence, err = collectDeliveryEvidence(ctx, runtime.ProjectRoot, *commit, *validationReport, runtime.Config)
+			if err == nil {
+				result, err = service.FinishWithEvidence(ctx, number, *agentID, *leaseToken, opID, summary, evidence, g.dryRun)
+			}
 		}
 	}
 	if err != nil {
@@ -639,10 +690,12 @@ func (c *cli) show(ctx context.Context, g globals, args []string) int {
 	if err != nil {
 		return c.providerFailure(g.format, err)
 	}
+	external, warnings := projectcontext.ExternalAttachments(issue)
+	issue.Attachments = append(issue.Attachments, external...)
 	issue = redact.New(runtime.Config.Security.RedactKeys).Issue(issue.Public())
 	text := fmt.Sprintf("#%s %s\nState: %s\nURL: %s\n\n%s",
 		issue.Number, issue.Title, issue.WorkflowState, issue.URL, issue.Body)
-	return c.success(g.format, issue, text)
+	return c.success(g.format, issue, text, warnings...)
 }
 
 // stringSliceFlag implements flag.Value to accept a repeatable flag.
@@ -815,8 +868,9 @@ Commands:
   block      Move a working issue to blocked
   release    Release a held lease back to ready
   reclaim    Recover an expired lease
-  finish     Deliver a summary and move to done
-  version    Print version
+  finish     Deliver evidence and move to the configured finish state
+  version    Print version and protocol information
+  capabilities Print supported commands and feature flags
 
 Global flags (accepted before or after the command):
   --config <path>

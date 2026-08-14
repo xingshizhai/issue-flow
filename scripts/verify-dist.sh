@@ -24,6 +24,7 @@ workflow:
   blocked_label: agent-blocked
   review_label: agent-review
   done_label: agent-done
+  finish_state: review
   lease_minutes: 120
   auto_close: false
   sync_provider_state: true
@@ -34,12 +35,15 @@ workflow:
 project:
   instruction_files: []
 validation:
+  require_report: false
   commands: []
 git:
   branch_pattern: "{type}/issue-{number}-{slug}"
   allow_commit: false
   allow_push: false
   allow_pull_request: false
+  require_commit: false
+  require_clean_worktree: false
 automation:
   level: patch
 security:
@@ -51,5 +55,12 @@ output=$($binary doctor --project "$work" --format json)
 printf '%s\n' "$output" | grep -q '"ok":true' || {
   echo "distribution artifact is stale or incompatible with the current config schema" >&2
   printf '%s\n' "$output" >&2
+  exit 1
+}
+
+version_output=$($binary version --format json)
+printf '%s\n' "$version_output" | grep -q '"workflowProtocolVersion":2' || {
+  echo "distribution artifact does not expose the current workflow protocol" >&2
+  printf '%s\n' "$version_output" >&2
   exit 1
 }

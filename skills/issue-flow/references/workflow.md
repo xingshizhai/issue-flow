@@ -73,7 +73,12 @@ Create a concise summary containing changes, validation results, limitations, an
 issue-flow finish 123 --agent "<stable-agent-id>" --lease-token "<claim-token>" --summary-file result.md --format json
 ```
 
-`finish` moves the Issue to done (`agent-done`). It does not authorize push, merge, or deployment. Optional `complete` remains for Issues still in `review`.
+When project policy requires delivery evidence, also pass `--commit <HEAD>` and
+`--validation-report <report.json>`. The report contains a `commands` array with
+`command`, `status` (`passed`, `failed`, `blocked`, or `skipped`), and optional
+`detail` fields. `finish` clears the lease and moves to `workflow.finish_state`,
+which defaults to `review`. `complete` records review and moves `review` to
+`done`. Neither command authorizes push, merge, or deployment.
 
 If work cannot finish, choose exactly one terminal action for the held lease:
 

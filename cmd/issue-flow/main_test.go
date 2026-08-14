@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xingshizhai/issue-flow/internal/config"
 	"github.com/xingshizhai/issue-flow/internal/domain"
 	"github.com/xingshizhai/issue-flow/internal/output"
 	"github.com/xingshizhai/issue-flow/internal/provider"
@@ -68,6 +69,22 @@ func TestVersion(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "0.1.0-dev" {
 		t.Fatalf("version output = %q", stdout)
+	}
+}
+
+func TestVersionJSONIncludesProtocolAndFeatures(t *testing.T) {
+	code, stdout, stderr := invoke("version", "--format", "json")
+	if code != 0 || stderr != "" {
+		t.Fatalf("version code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data buildInfo `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.ConfigSchemaVersion != config.CurrentVersion || envelope.Data.WorkflowProtocolVersion != workflowProtocolVersion || len(envelope.Data.Features) == 0 {
+		t.Fatalf("build info = %+v", envelope.Data)
 	}
 }
 
@@ -475,7 +492,7 @@ func TestProgressBlockAndFinishWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	issue := envelope.Data.Issue
-	if issue.WorkflowState != domain.StateDone || issue.Lease != nil {
+	if issue.WorkflowState != domain.StateReview || issue.Lease != nil {
 		t.Fatalf("finish result = %+v", issue)
 	}
 	if got := issue.Events[len(issue.Events)-1]; got.Operation != "finish" ||

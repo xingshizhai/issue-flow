@@ -25,7 +25,7 @@ Read [workflow.md](references/workflow.md) before claiming or changing an Issue.
 4. Run `start` with `--agent` and `--lease-token`.
 5. Implement and validate within the permissions and Git policy returned by `context`. Execute validation argv directly; do not turn it into a shell string.
 6. Use `heartbeat` during long work and `progress` for meaningful checkpoints.
-7. Write a secret-free summary to a regular file no larger than 64 KiB, then run `finish --summary-file`.
+7. Write a secret-free summary to a regular file no larger than 64 KiB. When `context` policy requires them, also prepare a structured validation report and current HEAD commit, then run `finish --summary-file ... --commit HEAD --validation-report ...`.
 
 End every held lease explicitly. Use `block` when an external dependency prevents progress, or `release` when returning unfinished work to the ready queue. Never silently abandon a lease.
 

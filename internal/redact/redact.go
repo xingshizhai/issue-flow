@@ -65,11 +65,20 @@ func (r Redactor) Issue(issue domain.Issue) domain.Issue {
 		issue.Comments[index].Body = r.String(issue.Comments[index].Body)
 	}
 	for index := range issue.Attachments {
+		issue.Attachments[index].ID = r.String(issue.Attachments[index].ID)
 		issue.Attachments[index].Name = r.String(issue.Attachments[index].Name)
 		issue.Attachments[index].URL = r.String(issue.Attachments[index].URL)
+		issue.Attachments[index].DownloadRef = r.String(issue.Attachments[index].DownloadRef)
 	}
 	for index := range issue.Events {
 		issue.Events[index].Message = r.String(issue.Events[index].Message)
+		if issue.Events[index].Delivery != nil {
+			for validationIndex := range issue.Events[index].Delivery.Validation {
+				item := &issue.Events[index].Delivery.Validation[validationIndex]
+				item.Command = r.String(item.Command)
+				item.Detail = r.String(item.Detail)
+			}
+		}
 	}
 	return issue
 }

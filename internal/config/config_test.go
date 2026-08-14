@@ -25,7 +25,7 @@ func TestWriteDefaultAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Provider.Type != "fake" || cfg.Workflow.LeaseMinutes != 120 {
+	if cfg.Provider.Type != "fake" || cfg.Workflow.LeaseMinutes != 120 || cfg.Workflow.FinishState != "review" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	if err := WriteDefault(path); err == nil {
@@ -72,6 +72,16 @@ func TestValidateStructuredCommandsAndGitPolicy(t *testing.T) {
 	cfg.Validation.Commands = []ValidationCommand{{Argv: []string{"go", "test"}, Timeout: "invalid"}}
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "positive Go duration") {
 		t.Fatalf("invalid timeout error = %v", err)
+	}
+	cfg = Default()
+	cfg.Workflow.FinishState = "closed"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "finish_state") {
+		t.Fatalf("finish state error = %v", err)
+	}
+	cfg = Default()
+	cfg.Git.RequireCommit = true
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "require_commit") {
+		t.Fatalf("required commit error = %v", err)
 	}
 	cfg = Default()
 	cfg.Git.AllowPush = true

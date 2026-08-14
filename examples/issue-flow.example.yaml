@@ -20,6 +20,7 @@ workflow:
   blocked_label: agent-blocked
   review_label: agent-review
   done_label: agent-done
+  finish_state: review
   lease_minutes: 120
   auto_close: false
   # Sync Gitee native Issue state (open/progressing/closed/rejected).
@@ -43,6 +44,7 @@ project:
     - CLAUDE.md
 
 validation:
+  require_report: false
   commands:
     - argv: ["go", "test", "./..."]
       timeout: 10m
@@ -52,6 +54,8 @@ git:
   allow_commit: false
   allow_push: false
   allow_pull_request: false
+  require_commit: false
+  require_clean_worktree: false
 
 automation:
   level: patch

@@ -60,6 +60,7 @@ type Workflow struct {
 	SyncProviderState bool              `yaml:"sync_provider_state" json:"syncProviderState"`
 	ProviderStates    map[string]string `yaml:"provider_states,omitempty" json:"providerStates,omitempty"`
 	EnterpriseStates  map[string]string `yaml:"enterprise_states,omitempty" json:"enterpriseStates,omitempty"`
+	FinishState       string            `yaml:"finish_state" json:"finishState"`
 }
 
 type Project struct {
@@ -67,7 +68,8 @@ type Project struct {
 }
 
 type Validation struct {
-	Commands []ValidationCommand `yaml:"commands" json:"commands"`
+	Commands      []ValidationCommand `yaml:"commands" json:"commands"`
+	RequireReport bool                `yaml:"require_report" json:"requireReport"`
 }
 
 type ValidationCommand struct {
@@ -80,6 +82,8 @@ type Git struct {
 	AllowCommit      bool   `yaml:"allow_commit" json:"allowCommit"`
 	AllowPush        bool   `yaml:"allow_push" json:"allowPush"`
 	AllowPullRequest bool   `yaml:"allow_pull_request" json:"allowPullRequest"`
+	RequireCommit    bool   `yaml:"require_commit" json:"requireCommit"`
+	RequireClean     bool   `yaml:"require_clean_worktree" json:"requireCleanWorktree"`
 }
 
 type Automation struct {
@@ -107,6 +111,7 @@ func Default() Config {
 			ReviewLabel:  "agent-review",
 			DoneLabel:    "agent-done",
 			LeaseMinutes: 120,
+			FinishState:  string(domain.StateReview),
 		},
 		Project:    Project{InstructionFiles: []string{"AGENTS.md", "CLAUDE.md"}},
 		Validation: Validation{Commands: []ValidationCommand{}},
@@ -235,6 +240,9 @@ func (c Config) Validate() error {
 	if c.Workflow.LeaseMinutes <= 0 {
 		return errors.New("workflow.lease_minutes must be positive")
 	}
+	if c.Workflow.FinishState != string(domain.StateReview) && c.Workflow.FinishState != string(domain.StateDone) {
+		return errors.New("workflow.finish_state must be review or done")
+	}
 	labels := make(map[string]domain.WorkflowState)
 	for _, state := range []domain.WorkflowState{
 		domain.StateReady, domain.StateClaimed, domain.StateWorking,
@@ -301,6 +309,9 @@ func (c Config) Validate() error {
 	}
 	if c.Git.AllowPullRequest && !c.Git.AllowPush {
 		return errors.New("git.allow_pull_request requires git.allow_push")
+	}
+	if c.Git.RequireCommit && !c.Git.AllowCommit {
+		return errors.New("git.require_commit requires git.allow_commit")
 	}
 	for i, command := range c.Validation.Commands {
 		if len(command.Argv) == 0 || strings.TrimSpace(command.Argv[0]) == "" {

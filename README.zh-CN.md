@@ -82,7 +82,7 @@ chmod 600 .env .issue-flow.yaml
 读取 AGENTS.md 及 context 列出的指令文件
 doctor → list --ready → show → context
 claim → start → 检查和修改代码 → 按 validation argv 测试
-progress → finish → done
+progress → finish → review → complete → done
 ```
 
 成功 claim 的一次性 Token 位于 `data.leaseToken`，Issue 位于 `data.issue`，
@@ -96,8 +96,8 @@ progress → finish → done
 ./bin/issue-flow complete 123 --reviewer "reviewer-id" --conclusion-file review.md --project . --format json
 ```
 
-`finish` 将 Issue 转为 `done`（`agent-done`）。可选的 `complete` 仍可将遗留在
-`review` 的 Issue 转为 `done`。Gitee 原生关闭取决于 `workflow.auto_close` /
+`finish` 将 Issue 转为 `workflow.finish_state`（默认 `review`），`complete` 再将
+审核后的 Issue 转为 `done`（`agent-done`）。Gitee 原生关闭取决于 `workflow.auto_close` /
 `provider_states.done`。
 
 ### 5. 从文件创建 Issue
@@ -188,7 +188,7 @@ issue-flow block 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --re
 issue-flow finish 123 --agent "<稳定的-agent-id>" --lease-token "<token>" --summary-file result.md
 ```
 
-交付摘要必须是稳定的普通文件，不能是符号链接，且最大为 64 KiB。CLI 只打开一次，并确认打开的文件描述符与检查过的路径指向同一文件，再通过该描述符读取，以拒绝路径替换竞态。`finish` 成功后清除租约并将 Issue 转为 `done`。
+交付摘要和验证报告必须是稳定的普通文件，不能是符号链接，且各自最大为 64 KiB。项目可要求 `finish` 同时传入 `--commit HEAD` 和 `--validation-report report.json`。成功后清除租约并进入配置的 finish 状态；交付证据只记录 commit、工作区是否干净和验证状态，不复制命令输出。
 
 人工审核后，必须显式记录审核人和审核结论：
 

@@ -39,21 +39,40 @@ type Comment struct {
 }
 
 type Attachment struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name"`
+	URL         string `json:"url,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	Size        int64  `json:"size,omitempty"`
+	Checksum    string `json:"checksum,omitempty"`
+	Source      string `json:"source,omitempty"`
+	DownloadRef string `json:"downloadRef,omitempty"`
+}
+
+type ValidationEvidence struct {
+	Command string `json:"command"`
+	Status  string `json:"status"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+type DeliveryEvidence struct {
+	Commit        string               `json:"commit,omitempty"`
+	WorktreeClean *bool                `json:"worktreeClean,omitempty"`
+	Validation    []ValidationEvidence `json:"validation,omitempty"`
 }
 
 type WorkflowEvent struct {
-	Version     int           `json:"version"`
-	OperationID string        `json:"operationId"`
-	Operation   string        `json:"operation"`
-	AgentID     string        `json:"agentId,omitempty"`
-	LeaseID     string        `json:"leaseId,omitempty"`
-	Message     string        `json:"message,omitempty"`
-	From        WorkflowState `json:"from,omitempty"`
-	To          WorkflowState `json:"to,omitempty"`
-	OccurredAt  time.Time     `json:"occurredAt"`
-	ExpiresAt   time.Time     `json:"expiresAt,omitempty"`
+	Version     int               `json:"version"`
+	OperationID string            `json:"operationId"`
+	Operation   string            `json:"operation"`
+	AgentID     string            `json:"agentId,omitempty"`
+	LeaseID     string            `json:"leaseId,omitempty"`
+	Message     string            `json:"message,omitempty"`
+	From        WorkflowState     `json:"from,omitempty"`
+	To          WorkflowState     `json:"to,omitempty"`
+	OccurredAt  time.Time         `json:"occurredAt"`
+	ExpiresAt   time.Time         `json:"expiresAt,omitempty"`
+	Delivery    *DeliveryEvidence `json:"delivery,omitempty"`
 }
 
 type Issue struct {

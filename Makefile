@@ -1,6 +1,7 @@
 VERSION ?= 0.1.0-dev
+BUILD_COMMIT ?= unknown
 DIST_DIR ?= dist
-LDFLAGS := -X main.version=$(VERSION)
+LDFLAGS := -X main.version=$(VERSION) -X main.buildCommit=$(BUILD_COMMIT)
 
 .PHONY: build snapshot verify-dist test test-race fmt vet check
 

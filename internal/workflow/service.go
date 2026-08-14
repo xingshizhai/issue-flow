@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type Service struct {
 	leaseDuration time.Duration
 	newToken      func() (string, error)
 	redactor      redact.Redactor
+	finishState   domain.WorkflowState
 }
 
 type Result struct {
@@ -44,7 +46,15 @@ func NewWithRedactKeys(p provider.Provider, c clock.Clock, leaseDuration time.Du
 	return &Service{
 		provider: p, clock: c, leaseDuration: leaseDuration,
 		newToken: randomToken, redactor: redact.New(keys),
+		finishState: domain.StateReview,
 	}
+}
+
+func (s *Service) WithFinishState(state domain.WorkflowState) *Service {
+	if state == domain.StateReview || state == domain.StateDone {
+		s.finishState = state
+	}
+	return s
 }
 
 func (s *Service) Claim(ctx context.Context, number, agentID, operationID string, dryRun bool) (Result, error) {
@@ -154,10 +164,14 @@ func (s *Service) Block(ctx context.Context, number, agentID, token, operationID
 }
 
 func (s *Service) Finish(ctx context.Context, number, agentID, token, operationID, summary string, dryRun bool) (Result, error) {
+	return s.FinishWithEvidence(ctx, number, agentID, token, operationID, summary, nil, dryRun)
+}
+
+func (s *Service) FinishWithEvidence(ctx context.Context, number, agentID, token, operationID, summary string, evidence *domain.DeliveryEvidence, dryRun bool) (Result, error) {
 	if strings.TrimSpace(summary) == "" {
 		return Result{}, fmt.Errorf("%w: finish summary is required", ErrInvalidInput)
 	}
-	return s.holderTransition(ctx, number, agentID, token, operationID, "finish", domain.StateDone, summary, true, dryRun)
+	return s.holderTransitionWithEvidence(ctx, number, agentID, token, operationID, "finish", s.finishState, summary, evidence, true, dryRun)
 }
 
 func (s *Service) Complete(ctx context.Context, number, reviewerID, operationID, conclusion string, dryRun bool) (Result, error) {
@@ -268,11 +282,24 @@ func (s *Service) holderTransition(
 	ctx context.Context, number, agentID, token, operationID, operation string,
 	next domain.WorkflowState, message string, clearLease, dryRun bool,
 ) (Result, error) {
+	return s.holderTransitionWithEvidence(ctx, number, agentID, token, operationID, operation, next, message, nil, clearLease, dryRun)
+}
+
+func (s *Service) holderTransitionWithEvidence(
+	ctx context.Context, number, agentID, token, operationID, operation string,
+	next domain.WorkflowState, message string, evidence *domain.DeliveryEvidence, clearLease, dryRun bool,
+) (Result, error) {
 	current, err := s.provider.GetIssue(ctx, number)
 	if err != nil {
 		return Result{}, err
 	}
 	if result, found, err := replayOperation(current, operationID, operation, agentID); found || err != nil {
+		if found && err == nil {
+			event, _ := findOperation(current, operationID)
+			if event.To != next || !reflect.DeepEqual(event.Delivery, evidence) {
+				return Result{}, fmt.Errorf("%w: operation ID is already used with different delivery semantics", ErrInvalidInput)
+			}
+		}
 		return result, err
 	}
 	now, err := s.authorizeLoaded(current, agentID, token)
@@ -289,6 +316,7 @@ func (s *Service) holderTransition(
 			AgentID: agentID, LeaseID: current.Lease.ID, Message: s.redactor.String(message),
 			From: current.WorkflowState, To: next, OccurredAt: now,
 			ExpiresAt: current.Lease.ExpiresAt,
+			Delivery:  evidence,
 		},
 	}
 	if clearLease {

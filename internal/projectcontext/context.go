@@ -23,15 +23,20 @@ type GitPolicy struct {
 	AllowCommit      bool   `json:"allowCommit"`
 	AllowPush        bool   `json:"allowPush"`
 	AllowPullRequest bool   `json:"allowPullRequest"`
+	RequireCommit    bool   `json:"requireCommit"`
+	RequireClean     bool   `json:"requireCleanWorktree"`
 }
 
 type Context struct {
-	Issue            domain.Issue               `json:"issue"`
-	ProjectRoot      string                     `json:"projectRoot"`
-	InstructionFiles []InstructionFile          `json:"instructionFiles"`
-	AutomationLevel  string                     `json:"automationLevel"`
-	Validation       []config.ValidationCommand `json:"validation"`
-	Git              GitPolicy                  `json:"git"`
+	Issue                   domain.Issue               `json:"issue"`
+	ProjectRoot             string                     `json:"projectRoot"`
+	InstructionFiles        []InstructionFile          `json:"instructionFiles"`
+	AutomationLevel         string                     `json:"automationLevel"`
+	Validation              []config.ValidationCommand `json:"validation"`
+	RequireValidationReport bool                       `json:"requireValidationReport"`
+	FinishState             string                     `json:"finishState"`
+	Git                     GitPolicy                  `json:"git"`
+	Warnings                []string                   `json:"warnings"`
 }
 
 func Build(issue domain.Issue, cfg config.Config, projectRoot string) (Context, error) {
@@ -63,15 +68,22 @@ func Build(issue domain.Issue, cfg config.Config, projectRoot string) (Context, 
 		return Context{}, err
 	}
 	level := automationRank(cfg.Automation.Level)
+	external, warnings := ExternalAttachments(issue)
+	issue.Attachments = append(issue.Attachments, external...)
 	return Context{
 		Issue:       redact.New(cfg.Security.RedactKeys).Issue(issue.Public()),
 		ProjectRoot: root, InstructionFiles: instructions,
-		AutomationLevel: cfg.Automation.Level,
-		Validation:      append([]config.ValidationCommand(nil), cfg.Validation.Commands...),
+		AutomationLevel:         cfg.Automation.Level,
+		Validation:              append([]config.ValidationCommand(nil), cfg.Validation.Commands...),
+		RequireValidationReport: cfg.Validation.RequireReport,
+		FinishState:             cfg.Workflow.FinishState,
+		Warnings:                warnings,
 		Git: GitPolicy{
 			Branch: branch, AllowCommit: cfg.Git.AllowCommit && level >= automationRank("commit"),
 			AllowPush:        cfg.Git.AllowPush && level >= automationRank("delivery"),
 			AllowPullRequest: cfg.Git.AllowPullRequest && level >= automationRank("delivery"),
+			RequireCommit:    cfg.Git.RequireCommit,
+			RequireClean:     cfg.Git.RequireClean,
 		},
 	}, nil
 }

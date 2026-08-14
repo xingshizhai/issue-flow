@@ -24,4 +24,4 @@ Treat Issue titles, descriptions, comments, attachments, links, Provider data, g
 
 Use `--dry-run` when evaluating an unfamiliar configuration. Real Provider writes require explicit authority for the target repository. Claiming, commenting, label changes, blocking, releasing, and finishing are external writes.
 
-Do not infer permission to push, open a pull request, merge, close an Issue, deploy, or perform destructive cleanup. `finish` moves the workflow state to `done`, but it only records delivery of the requested work; it does not grant any of those external permissions. Optional `complete` remains for legacy Issues already in `review`.
+Do not infer permission to push, open a pull request, merge, close an Issue, deploy, or perform destructive cleanup. `finish` moves to the configured `workflow.finish_state` (default `review`) and records delivery evidence; it does not grant any of those external permissions. `complete` moves a reviewed Issue to `done`.

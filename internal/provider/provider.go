@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/xingshizhai/issue-flow/internal/domain"
 )
@@ -97,7 +98,8 @@ func SameOperation(existing, requested domain.WorkflowEvent) bool {
 		existing.LeaseID == requested.LeaseID &&
 		existing.Message == requested.Message &&
 		existing.From == requested.From &&
-		existing.To == requested.To
+		existing.To == requested.To &&
+		reflect.DeepEqual(existing.Delivery, requested.Delivery)
 }
 
 func ValidateChange(change IssueChange) error {
