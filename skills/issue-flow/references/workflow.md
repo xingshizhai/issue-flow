@@ -88,3 +88,15 @@ issue-flow release 123 --agent "<stable-agent-id>" --lease-token "<claim-token>"
 ```
 
 Use `block` for a concrete external dependency. Use `release` when the Issue should be available to another agent.
+
+## Reopen
+
+```bash
+issue-flow reopen 123 --agent "<stable-agent-id>" --reason "same problem resurfaced" --format json
+```
+
+`reopen` moves a `done` Issue back to `ready`. It carries no lease check and
+only succeeds from `done`; it cannot be used to pull an Issue away from
+whoever currently holds its lease. Do not reopen an Issue on your own
+initiative — use it only when directed to, because the same problem
+resurfaced against an Issue that was already marked done.

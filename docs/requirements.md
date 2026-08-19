@@ -86,7 +86,12 @@ ready → claimed → working → done
 
 claimed/working/blocked → ready    释放或租约回收
 review → working                  审核退回
+done → ready                      reopen：相同问题再次出现
 ```
+
+`reopen` 不检查租约（`done` 状态下本来就没有租约），因此只允许从 `done`
+发起，不适用于 `claimed`/`working`/`blocked`——否则等于绕过租约把别人手上
+的任务夺走。
 
 非法状态转换必须失败，不得静默修改。
 
@@ -187,6 +192,7 @@ issue-flow progress 123 --message "..."
 issue-flow block 123 --reason "..."
 issue-flow finish 123 --summary-file result.md
 issue-flow complete 123 --reviewer reviewer-id --conclusion-file review.md
+issue-flow reopen 123 --agent maintainer-id --reason "相同问题再次出现"
 ```
 
 `finish` 支持记录：
@@ -202,6 +208,9 @@ issue-flow complete 123 --reviewer reviewer-id --conclusion-file review.md
 默认目标状态为 `review`。只有配置明确允许且调用方显式传参时，才能关闭 Issue。
 人工审核通过后，`complete` 记录审核人和结论并将状态推进到 `done`。仅当
 `workflow.auto_close` 显式启用时，Provider 才同步关闭原生 Issue。
+
+如果用户对一个已经 `done` 的 issue 又提出类似问题，`reopen` 把它带回
+`ready`，记录发起人和原因，不需要租约。仅允许从 `done` 发起。
 
 ### FR-08 Dry-run
 

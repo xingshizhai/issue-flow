@@ -563,6 +563,53 @@ func TestCompleteMovesReviewToDone(t *testing.T) {
 	}
 }
 
+func TestReopenMovesDoneToReady(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "closed but resurfaced", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateDone, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, stderr := invoke(
+		"reopen", "1", "--agent", "maintainer-a", "--reason", "same report filed again",
+		"--operation-id", "op_reopen_1", "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("reopen code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data struct {
+			Issue domain.Issue `json:"issue"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	issue := envelope.Data.Issue
+	if issue.WorkflowState != domain.StateReady {
+		t.Fatalf("reopen result = %+v", issue)
+	}
+	if got := issue.Events[len(issue.Events)-1]; got.Operation != "reopen" ||
+		got.AgentID != "maintainer-a" || !strings.Contains(got.Message, "filed again") {
+		t.Fatalf("reopen event = %+v", got)
+	}
+}
+
+func TestReopenRejectsIssueNotDone(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t, domain.Issue{
+		ID: "1", Number: "1", Title: "still in flight", ProviderState: domain.ProviderStateOpen,
+		WorkflowState: domain.StateWorking, Version: "1", CreatedAt: time.Now().UTC(),
+	})
+	code, stdout, _ := invoke(
+		"reopen", "1", "--agent", "maintainer-a", "--reason", "should not apply",
+		"--project", project, "--json",
+	)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	assertEnvelope(t, stdout, false, "STATE_CONFLICT")
+}
+
 func TestIssueOutputAndProgressWritesAreRedacted(t *testing.T) {
 	t.Parallel()
 

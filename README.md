@@ -214,6 +214,17 @@ issue-flow complete 123 --reviewer "<stable-reviewer-id>" --conclusion-file revi
 Issue; when `workflow.auto_close` is explicitly enabled, the Gitee Provider also
 synchronizes the native Issue state to `closed`.
 
+If a similar problem resurfaces after an Issue is already `done`, reopen it
+instead of filing a duplicate:
+
+```bash
+issue-flow reopen 123 --agent "<stable-agent-id>" --reason "same problem resurfaced"
+```
+
+`reopen` moves `done` back to `ready`. It has no lease requirement, and by
+design only succeeds from `done` — it cannot be used to pull an in-progress
+Issue away from whoever holds its lease; use `release` or `reclaim` for that.
+
 ## Fake Provider walkthrough
 
 Use an isolated project directory and a binary built from this trusted checkout. No network access or Provider token is needed:

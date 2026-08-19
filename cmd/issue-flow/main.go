@@ -78,6 +78,8 @@ func (c *cli) run(ctx context.Context, args []string) int {
 		return c.adopt(ctx, g, args[1:])
 	case "complete":
 		return c.complete(ctx, g, args[1:])
+	case "reopen":
+		return c.reopen(ctx, g, args[1:])
 	case "list":
 		return c.list(ctx, g, args[1:])
 	case "show":
@@ -107,7 +109,7 @@ func currentBuildInfo() buildInfo {
 		WorkflowProtocolVersion: workflowProtocolVersion,
 		Features: []string{
 			"configurable-finish-state", "delivery-evidence", "external-attachment-refs",
-			"create-extra-labels", "create-priority", "comment-body-file", "provider-state-sync",
+			"create-extra-labels", "create-priority", "comment-body-file", "provider-state-sync", "reopen",
 		},
 	}
 }
@@ -123,7 +125,7 @@ func (c *cli) capabilities(g globals) int {
 		Commands []string `json:"commands"`
 		Features []string `json:"features"`
 	}{
-		Commands: []string{"init", "doctor", "create", "comment", "adopt", "complete", "list", "show", "context", "claim", "start", "heartbeat", "progress", "block", "release", "reclaim", "finish", "version", "capabilities"},
+		Commands: []string{"init", "doctor", "create", "comment", "adopt", "complete", "reopen", "list", "show", "context", "claim", "start", "heartbeat", "progress", "block", "release", "reclaim", "finish", "version", "capabilities"},
 		Features: info.Features,
 	}
 	return c.success(g.format, data, strings.Join(data.Features, "\n"))
@@ -160,6 +162,45 @@ func (c *cli) complete(ctx context.Context, g globals, args []string) int {
 		opID = *requestedOperationID
 	}
 	result, err := runtime.Workflow().Complete(ctx, args[0], *reviewer, opID, conclusion, g.dryRun)
+	if err != nil {
+		return c.workflowFailure(g.format, opID, err)
+	}
+	result.Issue = redact.New(runtime.Config.Security.RedactKeys).Issue(result.Issue.Public())
+	return c.successWithID(g.format, opID, result,
+		fmt.Sprintf("#%s is now %s", result.Issue.Number, result.Issue.WorkflowState))
+}
+
+// reopen moves a done Issue back to ready when a similar problem resurfaces.
+// It carries no lease check by design (see workflow.Service.Reopen), so it
+// only succeeds from done; use release or reclaim to hand back an
+// in-progress issue instead.
+func (c *cli) reopen(ctx context.Context, g globals, args []string) int {
+	if len(args) == 0 || !validIssueReference(args[0]) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("reopen requires one valid issue number"), 2)
+	}
+	flags := flag.NewFlagSet("reopen", flag.ContinueOnError)
+	flags.SetOutput(c.stderr)
+	agentID := flags.String("agent", "", "stable identifier for who is reopening the issue")
+	reason := flags.String("reason", "", "why the issue is being reopened")
+	requestedOperationID := flags.String("operation-id", "", "stable operation ID for retry correlation")
+	if err := flags.Parse(args[1:]); err != nil {
+		return c.fail(g.format, "INVALID_ARGUMENT", err, 2)
+	}
+	if flags.NArg() != 0 || *agentID == "" || *reason == "" {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("reopen requires --agent, --reason, and no extra arguments"), 2)
+	}
+	if *requestedOperationID != "" && !validOperationID(*requestedOperationID) {
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--operation-id must start with op_ and contain 1 to 64 safe characters"), 2)
+	}
+	runtime, code := c.open(g)
+	if runtime == nil {
+		return code
+	}
+	opID := operationID()
+	if *requestedOperationID != "" {
+		opID = *requestedOperationID
+	}
+	result, err := runtime.Workflow().Reopen(ctx, args[0], *agentID, opID, *reason, g.dryRun)
 	if err != nil {
 		return c.workflowFailure(g.format, opID, err)
 	}
@@ -864,6 +905,7 @@ Commands:
   adopt      Bring an unmanaged issue (no workflow label) into ready
   comment    Add a plain-text comment to an issue (no lease required)
   complete   Record human review and move a review Issue to done
+  reopen     Move a done Issue back to ready when a similar problem resurfaces
   list       List issues
   show       Show one issue
   context    Build normalized agent context

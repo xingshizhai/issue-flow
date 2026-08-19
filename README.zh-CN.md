@@ -199,6 +199,17 @@ issue-flow complete 123 --reviewer "<稳定的审核人ID>" --conclusion-file re
 `complete` 把 `review` 推进到 `done`。默认不会关闭 Provider Issue；显式启用
 `workflow.auto_close` 后，Gitee Provider 还会把原生 Issue 状态同步为 `closed`。
 
+如果一个已经 `done` 的 Issue 又出现了类似问题，用 reopen 而不是再开一个重复
+Issue：
+
+```bash
+issue-flow reopen 123 --agent "<稳定的操作者ID>" --reason "相同问题再次出现"
+```
+
+`reopen` 把 `done` 带回 `ready`，不需要租约，且按设计只允许从 `done` 发起——
+不能用它从正在进行中的 Issue 手里把租约抢走，那种情况请用 `release` 或
+`reclaim`。
+
 ## Fake Provider 完整演练
 
 使用隔离的项目目录和从当前可信检出版本构建的二进制。该流程不需要网络或 Provider Token：

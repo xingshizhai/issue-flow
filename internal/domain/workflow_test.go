@@ -21,6 +21,8 @@ func TestValidateTransition(t *testing.T) {
 		{"reject review", StateReview, StateWorking, false},
 		{"skip claim", StateReady, StateWorking, true},
 		{"blocked finish", StateBlocked, StateDone, false},
+		{"reopen", StateDone, StateReady, false},
+		{"done is otherwise terminal", StateDone, StateWorking, true},
 	}
 	for _, tt := range tests {
 		tt := tt

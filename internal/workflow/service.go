@@ -216,6 +216,53 @@ func (s *Service) Complete(ctx context.Context, number, reviewerID, operationID,
 	}, dryRun)
 }
 
+// Reopen moves a done Issue back to ready when a similar problem resurfaces.
+// Unlike release/reclaim it carries no lease check, so it is restricted to
+// the done state on purpose: allowing it from claimed/working/blocked would
+// let anyone reset an issue away from whoever currently holds its lease.
+func (s *Service) Reopen(ctx context.Context, number, actorID, operationID, reason string, dryRun bool) (Result, error) {
+	if err := validateAgentID(actorID); err != nil {
+		return Result{}, err
+	}
+	if strings.TrimSpace(reason) == "" {
+		return Result{}, fmt.Errorf("%w: reopen reason is required", ErrInvalidInput)
+	}
+	current, err := s.provider.GetIssue(ctx, number)
+	if err != nil {
+		return Result{}, err
+	}
+	if event, found := findOperation(current, operationID); found {
+		if event.Operation != "reopen" || event.AgentID != actorID {
+			return Result{}, fmt.Errorf("%w: operation ID is already used", ErrInvalidInput)
+		}
+		if dryRun {
+			return Result{Issue: current, DryRun: true}, nil
+		}
+		next := domain.StateReady
+		return s.apply(ctx, current, provider.IssueChange{
+			WorkflowState: &next, Event: event,
+		}, provider.Precondition{
+			Version: current.Version, WorkflowState: current.WorkflowState,
+		}, false)
+	}
+	if current.WorkflowState != domain.StateDone {
+		return Result{}, fmt.Errorf("%w: reopen is only valid from done (issue is %s)",
+			ErrStateConflict, current.WorkflowState)
+	}
+	next := domain.StateReady
+	change := provider.IssueChange{
+		WorkflowState: &next,
+		Event: domain.WorkflowEvent{
+			Version: 1, OperationID: operationID, Operation: "reopen",
+			AgentID: actorID, Message: s.redactor.String(reason),
+			From: current.WorkflowState, To: next, OccurredAt: s.clock.Now(),
+		},
+	}
+	return s.apply(ctx, current, change, provider.Precondition{
+		Version: current.Version, WorkflowState: domain.StateDone,
+	}, dryRun)
+}
+
 func (s *Service) Heartbeat(ctx context.Context, number, agentID, token, operationID string, dryRun bool) (Result, error) {
 	current, err := s.provider.GetIssue(ctx, number)
 	if err != nil {

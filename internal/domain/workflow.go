@@ -19,6 +19,8 @@ var transitions = map[WorkflowState]map[WorkflowState]bool{
 	StateWorking: {StateDone: true, StateReview: true, StateBlocked: true, StateReady: true},
 	StateBlocked: {StateReady: true, StateDone: true, StateReview: true},
 	StateReview:  {StateDone: true, StateWorking: true},
+	// reopen: a similar report resurfaces after an issue was already done.
+	StateDone: {StateReady: true},
 }
 
 func ValidateTransition(from, to WorkflowState) error {

@@ -143,6 +143,65 @@ func TestAppliedClaimCannotReturnOneTimeTokenAgain(t *testing.T) {
 	}
 }
 
+func TestReopenMovesDoneIssueBackToReady(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateDone, Version: "1",
+	}
+	winner := current
+	winner.WorkflowState = domain.StateReady
+	service := New(claimRaceProvider{ready: current, winner: winner}, clock.Fixed{Time: now}, time.Hour)
+	result, err := service.Reopen(context.Background(), "1", "maintainer-a", "op_reopen_1", "same report resurfaced", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Issue.WorkflowState != domain.StateReady {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestReopenRejectsIssueNotDone(t *testing.T) {
+	t.Parallel()
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateWorking, Version: "1",
+	}
+	service := New(claimRaceProvider{ready: current}, clock.Fixed{Time: time.Now().UTC()}, time.Hour)
+	_, err := service.Reopen(context.Background(), "1", "maintainer-a", "op_reopen_working", "should not apply", false)
+	if !errors.Is(err, ErrStateConflict) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestReopenRequiresReason(t *testing.T) {
+	t.Parallel()
+	current := domain.Issue{ID: "1", Number: "1", WorkflowState: domain.StateDone, Version: "1"}
+	service := New(claimRaceProvider{ready: current}, clock.Fixed{Time: time.Now().UTC()}, time.Hour)
+	_, err := service.Reopen(context.Background(), "1", "maintainer-a", "op_reopen_no_reason", "", false)
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestReopenedOperationCanBeReplayedWithoutAnotherWrite(t *testing.T) {
+	t.Parallel()
+	current := domain.Issue{
+		ID: "1", Number: "1", WorkflowState: domain.StateReady,
+		Events: []domain.WorkflowEvent{{
+			Version: 1, OperationID: "op_reopen_retry", Operation: "reopen",
+			AgentID: "maintainer-a", From: domain.StateDone, To: domain.StateReady,
+		}},
+	}
+	service := New(claimRaceProvider{ready: current, winner: current}, clock.Fixed{Time: time.Now().UTC()}, time.Hour)
+	result, err := service.Reopen(context.Background(), "1", "maintainer-a", "op_reopen_retry", "same report resurfaced", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Issue.WorkflowState != domain.StateReady {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestFinishStateCanBeConfiguredToDone(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
