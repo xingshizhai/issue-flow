@@ -1,4 +1,4 @@
-VERSION ?= 0.1.0-dev
+VERSION ?= 0.2.0-dev
 BUILD_COMMIT ?= unknown
 DIST_DIR ?= dist
 LDFLAGS := -X main.version=$(VERSION) -X main.buildCommit=$(BUILD_COMMIT)

@@ -82,6 +82,7 @@ type Issue struct {
 	Body          string          `json:"body"`
 	ProviderState ProviderState   `json:"providerState"`
 	WorkflowState WorkflowState   `json:"workflowState"`
+	Priority      string          `json:"priority,omitempty"`
 	Labels        []Label         `json:"labels"`
 	Assignees     []Actor         `json:"assignees"`
 	Comments      []Comment       `json:"comments"`

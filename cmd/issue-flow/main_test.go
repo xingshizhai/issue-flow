@@ -67,7 +67,7 @@ func TestVersion(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("version code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	if strings.TrimSpace(stdout) != "0.1.0-dev" {
+	if strings.TrimSpace(stdout) != "0.2.0-dev" {
 		t.Fatalf("version output = %q", stdout)
 	}
 }
@@ -841,6 +841,53 @@ func TestCreatePersistsReadyTypedIssue(t *testing.T) {
 		envelope.Data.Labels[1].Name != "agent-ready" {
 		t.Fatalf("labels = %+v", envelope.Data.Labels)
 	}
+}
+
+func TestCreateWithPrioritySetsNativeFieldNotLabel(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	bodyPath := filepath.Join(project, "body.md")
+	if err := os.WriteFile(bodyPath, []byte("acceptance criteria"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := invoke(
+		"create", "--type", "bug", "--title", "Add feature",
+		"--body-file", bodyPath, "--priority", "high", "--project", project, "--json",
+	)
+	if code != 0 || stderr != "" {
+		t.Fatalf("create code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var envelope struct {
+		Data domain.Issue `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Priority != "high" {
+		t.Fatalf("priority = %q", envelope.Data.Priority)
+	}
+	for _, label := range envelope.Data.Labels {
+		if strings.Contains(label.Name, "priority") {
+			t.Fatalf("priority leaked into labels: %+v", envelope.Data.Labels)
+		}
+	}
+}
+
+func TestCreateRejectsInvalidPriority(t *testing.T) {
+	t.Parallel()
+	project := seededProject(t)
+	bodyPath := filepath.Join(project, "body.md")
+	if err := os.WriteFile(bodyPath, []byte("acceptance criteria"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, _ := invoke(
+		"create", "--type", "bug", "--title", "Add feature",
+		"--body-file", bodyPath, "--priority", "urgent", "--project", project, "--json",
+	)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	assertEnvelope(t, stdout, false, "INVALID_ARGUMENT")
 }
 
 func TestCreateMergesCustomLabelsAndDedupes(t *testing.T) {

@@ -47,6 +47,35 @@ func TestListIssuesMapsStateAndPagination(t *testing.T) {
 	}
 }
 
+func TestGetIssueMapsPriority(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/owner/repo/issues/IABC1":
+			_, _ = w.Write([]byte(`{
+				"id":10,"number":"IABC1","title":"bug","body":"details","state":"open",
+				"html_url":"https://gitee.test/owner/repo/issues/IABC1","priority":3,
+				"labels":[{"name":"agent-ready"}],
+				"created_at":"2026-07-30T01:00:00Z","updated_at":"2026-07-30T02:00:00Z"
+			}`))
+		case "/repos/owner/repo/issues/IABC1/comments":
+			_, _ = w.Write([]byte(`[]`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"id":7,"login":"automation"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	issue, err := testProvider(handler).GetIssue(context.Background(), "IABC1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issue.Priority != "high" {
+		t.Fatalf("priority = %q", issue.Priority)
+	}
+}
+
 func TestCreateIssueMapsNativeIssueType(t *testing.T) {
 	t.Parallel()
 	var createBody map[string]string
@@ -87,6 +116,75 @@ func TestCreateIssueMapsNativeIssueType(t *testing.T) {
 	}
 	if createBody["issue_type"] != "需求" {
 		t.Fatalf("feature create body = %#v", createBody)
+	}
+}
+
+func TestCreateIssueWithPriorityRequiresEnterprise(t *testing.T) {
+	t.Parallel()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/issues":
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	_, err := testProvider(handler).CreateIssue(context.Background(), provider.CreateIssueInput{
+		Title: "bug", Body: "details", Type: "bug",
+		Labels: []string{"type-bug", "agent-ready"}, Priority: "high",
+	})
+	if !errors.Is(err, provider.ErrUnsupported) {
+		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestCreateIssueSetsEnterprisePriority(t *testing.T) {
+	t.Parallel()
+	var enterprisePayload map[string]any
+	entServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut || r.URL.Path != "/42/issues/IABC1" {
+			t.Fatalf("unexpected enterprise request %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&enterprisePayload); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ident":"IABC1"}`))
+	}))
+	t.Cleanup(entServer.Close)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/issues":
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1":
+			_, _ = w.Write([]byte(issueJSON("IABC1", "agent-ready")))
+		case r.URL.Path == "/repos/owner/repo/issues/IABC1/comments":
+			_, _ = w.Write([]byte(`[]`))
+		case r.URL.Path == "/user":
+			_, _ = w.Write([]byte(`{"id":7,"login":"automation"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	client := NewClientWithBaseURL("https://gitee.test", "test-token", memoryHTTPClient(handler))
+	enterprise := NewEnterpriseClient("ent-token", entServer.URL, 42, "", time.Second)
+	p := NewWithEnterprise(client, "owner", "repo", config.Default().Workflow, enterprise)
+
+	_, err := p.CreateIssue(context.Background(), provider.CreateIssueInput{
+		Title: "bug", Body: "details", Type: "bug",
+		Labels: []string{"type-bug", "agent-ready"}, Priority: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enterprisePayload["qt"] != "ident" {
+		t.Fatalf("payload = %#v", enterprisePayload)
+	}
+	if priority, ok := enterprisePayload["priority"].(float64); !ok || int(priority) != 3 {
+		t.Fatalf("priority = %#v", enterprisePayload["priority"])
 	}
 }
 

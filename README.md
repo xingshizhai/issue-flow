@@ -8,7 +8,7 @@ Issue Flow gives coding agents a deterministic workflow for automatically handli
 
 Run `make check` before submitting changes. It checks formatting, unit and integration tests, the race detector, and `go vet`; GitHub CI repeats these checks and builds on Linux, macOS, and Windows.
 
-Create unsigned local snapshot binaries with `make snapshot VERSION=0.1.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts.
+Create unsigned local snapshot binaries with `make snapshot VERSION=0.2.0-dev`. It writes reproducible, trimmed Linux amd64, macOS arm64, and Windows amd64 binaries plus `checksums.txt` under `dist/`. This does not publish or sign artifacts.
 
 Files under `dist/` are ignored local outputs and may be older than the checked-out source. After pulling configuration or CLI changes, rebuild them with `make snapshot` and run `make verify-dist`; development automation should prefer a binary freshly built from the current checkout.
 

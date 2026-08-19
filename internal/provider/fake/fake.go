@@ -124,8 +124,8 @@ func (s *Store) CreateIssue(ctx context.Context, input provider.CreateIssueInput
 		created = domain.Issue{
 			ID: strconv.Itoa(maximum + 1), Number: strconv.Itoa(maximum + 1),
 			Title: input.Title, Body: input.Body, ProviderState: domain.ProviderStateOpen,
-			WorkflowState: domain.StateReady,
-			Labels:        []domain.Label{}, Assignees: []domain.Actor{}, Comments: []domain.Comment{},
+			WorkflowState: domain.StateReady, Priority: input.Priority,
+			Labels: []domain.Label{}, Assignees: []domain.Actor{}, Comments: []domain.Comment{},
 			Attachments: []domain.Attachment{}, Events: []domain.WorkflowEvent{},
 			Version: "1", CreatedAt: now, UpdatedAt: now,
 		}

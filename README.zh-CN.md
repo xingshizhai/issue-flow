@@ -8,7 +8,7 @@ Issue Flow 为代码开发 Agent 提供确定性的自动化工作流，用于�
 
 提交改动前运行 `make check`，它会检查格式、单元与集成测试、race detector 和 `go vet`；GitHub CI 会重复这些检查，并在 Linux、macOS 和 Windows 上构建。
 
-运行 `make snapshot VERSION=0.1.0-dev` 可生成未签名的本地快照：`dist/` 下包含经过 `-trimpath` 构建的 Linux amd64、macOS arm64、Windows amd64 二进制和 `checksums.txt`。该命令不会发布或签名产物。
+运行 `make snapshot VERSION=0.2.0-dev` 可生成未签名的本地快照：`dist/` 下包含经过 `-trimpath` 构建的 Linux amd64、macOS arm64、Windows amd64 二进制和 `checksums.txt`。该命令不会发布或签名产物。
 
 `dist/` 下的文件是被忽略的本地构建产物，可能早于当前检出的源码。拉取配置结构或 CLI 变更后，请执行 `make snapshot` 重新生成，再执行 `make verify-dist` 检查兼容性；开发自动化应优先使用从当前 checkout 新构建的二进制。
 

@@ -143,6 +143,22 @@ func (c *EnterpriseClient) SetIssueStateByTitle(ctx context.Context, number, tit
 	return c.do(ctx, http.MethodPut, path, nil, payload, &enterpriseIssueDetail{})
 }
 
+// SetIssuePriority writes Gitee's native priority field (0-4) through the
+// same enterprise Kanban HTTP backend used for issue_state, since the public
+// Open API has no documented way to set it.
+func (c *EnterpriseClient) SetIssuePriority(ctx context.Context, number string, priority int) error {
+	entID, err := c.ResolveEnterpriseID(ctx)
+	if err != nil {
+		return err
+	}
+	payload := map[string]any{
+		"qt":       "ident",
+		"priority": priority,
+	}
+	path := fmt.Sprintf("/%d/issues/%s", entID, url.PathEscape(number))
+	return c.do(ctx, http.MethodPut, path, nil, payload, &enterpriseIssueDetail{})
+}
+
 func (c *EnterpriseClient) lookupStateID(ctx context.Context, issueTypeID int, title string) (int, error) {
 	c.mu.Lock()
 	if cached, ok := c.stateCache[issueTypeID]; ok {

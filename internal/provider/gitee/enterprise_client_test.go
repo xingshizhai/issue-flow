@@ -60,6 +60,33 @@ func TestEnterpriseSetIssueStateByTitle(t *testing.T) {
 	}
 }
 
+func TestEnterpriseSetIssuePriority(t *testing.T) {
+	t.Parallel()
+	var putBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPut || r.URL.Path != "/42/issues/IK58V2" {
+			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&putBody); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"ident":"IK58V2"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewEnterpriseClient("ent-token", server.URL, 42, "", time.Second)
+	if err := client.SetIssuePriority(context.Background(), "IK58V2", 3); err != nil {
+		t.Fatal(err)
+	}
+	if putBody["qt"] != "ident" {
+		t.Fatalf("payload = %#v", putBody)
+	}
+	if priority, ok := putBody["priority"].(float64); !ok || int(priority) != 3 {
+		t.Fatalf("priority = %#v", putBody["priority"])
+	}
+}
+
 func TestEnterpriseNativeStateUsesConfiguredTitles(t *testing.T) {
 	t.Parallel()
 	var syncedTitle string

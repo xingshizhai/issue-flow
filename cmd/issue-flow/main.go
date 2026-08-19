@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	version     = "0.1.0-dev"
+	version     = "0.2.0-dev"
 	buildCommit = "unknown"
 )
 
@@ -107,7 +107,7 @@ func currentBuildInfo() buildInfo {
 		WorkflowProtocolVersion: workflowProtocolVersion,
 		Features: []string{
 			"configurable-finish-state", "delivery-evidence", "external-attachment-refs",
-			"create-extra-labels", "comment-body-file", "provider-state-sync",
+			"create-extra-labels", "create-priority", "comment-body-file", "provider-state-sync",
 		},
 	}
 }
@@ -174,6 +174,7 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	title := flags.String("title", "", "issue title")
 	bodyFile := flags.String("body-file", "", "path to issue body")
 	issueType := flags.String("type", "", "bug, feature, or improvement")
+	priority := flags.String("priority", "", "issue priority: low, medium, high, or critical (written to the provider's native priority field, not a label)")
 	var extraLabels stringSliceFlag
 	flags.Var(&extraLabels, "label", "extra label to attach, beyond the type/ready labels (repeatable)")
 	if err := flags.Parse(args); err != nil {
@@ -184,6 +185,11 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	}
 	if *issueType != "bug" && *issueType != "feature" && *issueType != "improvement" {
 		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--type must be bug, feature, or improvement"), 2)
+	}
+	switch *priority {
+	case "", "low", "medium", "high", "critical":
+	default:
+		return c.fail(g.format, "INVALID_ARGUMENT", errors.New("--priority must be low, medium, high, or critical"), 2)
 	}
 	body, err := readSummaryFile(*bodyFile)
 	if err != nil {
@@ -204,7 +210,7 @@ func (c *cli) create(ctx context.Context, g globals, args []string) int {
 	}
 	input := provider.CreateIssueInput{
 		Title: strings.TrimSpace(*title), Body: body, Type: *issueType,
-		Labels: labels,
+		Labels: labels, Priority: *priority,
 	}
 	if g.dryRun {
 		return c.success(g.format, input, "Would create issue: "+input.Title)

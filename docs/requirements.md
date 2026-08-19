@@ -98,14 +98,9 @@ review → working                  审核退回
 - `type-feature`
 - `type-improvement`
 
-优先级：
+优先级不使用标签表示。Gitee 的 Issue 对象自带原生 `priority` 字段（0-4：不指定/不重要/次要/主要/严重），但公开 Open API 的创建/更新接口都不接受该参数写入，只能读取。因此 `create --priority low|medium|high|critical` 通过企业版看板使用的私有 HTTP 接口写入该字段，要求 `provider.enterprise.enabled`；非企业版仓库暂不支持写入优先级。
 
-- `priority:p0`
-- `priority:p1`
-- `priority:p2`
-- `priority:p3`
-
-工作流标签在同一时刻只能存在一个。类型和优先级原则上也各自唯一。
+工作流标签在同一时刻只能存在一个。类型标签原则上唯一。
 
 ## 6. 功能需求
 

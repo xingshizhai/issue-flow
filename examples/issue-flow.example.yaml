@@ -6,6 +6,8 @@ provider:
   repo: example-repo
   token_env: GITEE_TOKEN
   # Optional: enterprise Kanban issue_state sync (Open API still used for labels/lease).
+  # Also required for `create --priority`, which writes Gitee's native
+  # priority field instead of a label (the public Open API can't set it).
   # enterprise:
   #   enabled: true
   #   path: example-enterprise   # or id: 12345

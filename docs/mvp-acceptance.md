@@ -28,7 +28,7 @@ Run before accepting a change:
 
 ```bash
 make check
-make snapshot VERSION=0.1.0-dev
+make snapshot VERSION=0.2.0-dev
 ```
 
 Real Gitee tests remain opt-in and require an explicitly authorized test

@@ -53,6 +53,10 @@ type CreateIssueInput struct {
 	Body   string
 	Type   string
 	Labels []string
+	// Priority is provider-specific and optional; empty means leave the
+	// provider's default. For Gitee: low, medium, high, or critical, mapped
+	// to its native priority field rather than a label.
+	Priority string
 }
 
 type IssueCreator interface {

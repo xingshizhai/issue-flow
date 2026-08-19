@@ -17,11 +17,12 @@ import (
 )
 
 type Provider struct {
-	client   Transport
-	owner    string
-	repo     string
-	workflow config.Workflow
-	native   NativeStateSyncer
+	client     Transport
+	owner      string
+	repo       string
+	workflow   config.Workflow
+	native     NativeStateSyncer
+	enterprise *EnterpriseClient
 
 	actorOnce sync.Once
 	actor     string
@@ -40,10 +41,11 @@ func NewWithEnterprise(
 	enterprise *EnterpriseClient,
 ) *Provider {
 	p := &Provider{
-		client:   client,
-		owner:    owner,
-		repo:     repo,
-		workflow: workflow,
+		client:     client,
+		owner:      owner,
+		repo:       repo,
+		workflow:   workflow,
+		enterprise: enterprise,
 	}
 	p.native = newNativeStateSyncer(client, owner, repo, &p.workflow, enterprise)
 	return p
@@ -197,7 +199,39 @@ func (p *Provider) CreateIssue(ctx context.Context, input provider.CreateIssueIn
 		}, &created); err != nil {
 		return domain.Issue{}, err
 	}
+	if input.Priority != "" {
+		if err := p.setPriority(ctx, created.Number, input.Priority); err != nil {
+			return domain.Issue{}, fmt.Errorf("issue created but priority update failed: %w", err)
+		}
+	}
 	return p.GetIssue(ctx, created.Number)
+}
+
+// giteePriorityLevels maps issue-flow's priority words to Gitee's native
+// integer scale (0 is "unspecified" and is never written by issue-flow).
+var giteePriorityLevels = map[string]int{
+	"low": 1, "medium": 2, "high": 3, "critical": 4,
+}
+
+var giteePriorityNames = map[int]string{
+	1: "low", 2: "medium", 3: "high", 4: "critical",
+}
+
+// setPriority writes Gitee's native priority field. There is no documented
+// Open API for this (create/update only accept title/body/labels/etc.), so
+// it goes through the same enterprise Kanban HTTP backend already used for
+// issue_state sync — meaning it only works for Gitee Enterprise repos.
+func (p *Provider) setPriority(ctx context.Context, number, priority string) error {
+	if p.enterprise == nil {
+		return fmt.Errorf(
+			"%w: --priority requires provider.enterprise.enabled (Gitee's priority field has no public write API)",
+			provider.ErrUnsupported)
+	}
+	level, ok := giteePriorityLevels[priority]
+	if !ok {
+		return fmt.Errorf("%w: unknown priority %q", provider.ErrMisconfigured, priority)
+	}
+	return p.enterprise.SetIssuePriority(ctx, number, level)
 }
 
 // AddComment posts a plain-text comment with no lease/state requirement.
@@ -347,6 +381,7 @@ func (p *Provider) mapIssue(item issueDTO, notes []noteDTO) domain.Issue {
 	result := domain.Issue{
 		ID: strconv.FormatInt(item.ID, 10), Number: item.Number, Title: item.Title, Body: item.Body,
 		ProviderState: domain.ProviderState(item.State), URL: item.HTMLURL,
+		Priority:  giteePriorityNames[item.Priority],
 		Version:   item.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 		Labels:   make([]domain.Label, 0, len(item.Labels)),
@@ -495,6 +530,7 @@ type issueDTO struct {
 	Body      string     `json:"body"`
 	State     string     `json:"state"`
 	HTMLURL   string     `json:"html_url"`
+	Priority  int        `json:"priority"`
 	Labels    []labelDTO `json:"labels"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
