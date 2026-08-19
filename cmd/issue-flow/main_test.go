@@ -72,6 +72,18 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestVersionShortFlag(t *testing.T) {
+	t.Parallel()
+
+	code, stdout, stderr := invoke("-v")
+	if code != 0 || stderr != "" {
+		t.Fatalf("-v code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if strings.TrimSpace(stdout) != "0.2.0-dev" {
+		t.Fatalf("-v output = %q", stdout)
+	}
+}
+
 func TestVersionJSONIncludesProtocolAndFeatures(t *testing.T) {
 	code, stdout, stderr := invoke("version", "--format", "json")
 	if code != 0 || stderr != "" {

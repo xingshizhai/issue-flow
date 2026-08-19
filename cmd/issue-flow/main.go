@@ -62,7 +62,7 @@ func (c *cli) run(ctx context.Context, args []string) int {
 	case "help", "--help", "-h":
 		c.usage(c.stdout)
 		return 0
-	case "version", "--version":
+	case "version", "--version", "-v":
 		return c.versionInfo(g)
 	case "capabilities":
 		return c.capabilities(g)
@@ -875,7 +875,7 @@ Commands:
   release    Release a held lease back to ready
   reclaim    Recover an expired lease
   finish     Deliver evidence and move to the configured finish state
-  version    Print version and protocol information
+  version    Print version and protocol information (aliases: --version, -v)
   capabilities Print supported commands and feature flags
 
 Global flags (accepted before or after the command):
